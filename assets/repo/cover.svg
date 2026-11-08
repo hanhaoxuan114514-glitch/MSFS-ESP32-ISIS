@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360">
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#142b42"/><stop offset="1" stop-color="#070e18"/></linearGradient><linearGradient id="throttle"><stop stop-color="#2cf525"/><stop offset=".55" stop-color="#ffd341"/><stop offset="1" stop-color="#ff5555"/></linearGradient><clipPath id="display"><rect x="879" y="54" width="250" height="250" rx="19"/></clipPath></defs>
+<rect width="1200" height="360" rx="20" fill="url(#bg)"/>
+<path d="M0 310H1200M780 0V360" stroke="#264259" stroke-width="1"/>
+<circle cx="78" cy="67" r="5" fill="#51dbaa"/>
+<g font-family="Segoe UI,Arial,sans-serif"><text x="96" y="74" font-size="18" letter-spacing="3" fill="#76cdeb">MSFS 2024  /  USB LINK</text>
+<text x="64" y="153" font-size="63" font-weight="700" fill="#f0f6fc">A350 ISIS</text>
+<text x="67" y="200" font-size="25" fill="#bdd0e2">A real screen for your virtual cockpit.</text>
+<text x="67" y="262" font-size="17" fill="#81a4c2">ESP32-S3  ·  480 × 480  ·  LVGL  ·  SimConnect</text>
+<text x="67" y="335" font-size="13" letter-spacing="2" fill="#668ba9">WIRED TELEMETRY  /  COMPACT DESKTOP CONTROL</text></g>
+<rect x="866" y="41" width="276" height="276" rx="29" fill="#1b2c3d" stroke="#3b556b" stroke-width="2"/>
+<g clip-path="url(#display)"><rect x="879" y="54" width="250" height="250" fill="#040a10"/><path d="M924 80Q1004 60 1084 80V218H924Z" fill="#2096d5"/><path d="M924 152H1084V218Q1004 237 924 218Z" fill="#b85948"/><path d="M924 152H1084M990 112H1018M997 128H1011M997 184H1011M990 200H1018" stroke="#d9dcda" stroke-width="3"/>
+<path d="M960 149H983V158M1025 158V149H1048M1000 148H1008V156H1000Z" stroke="#ffd76c" stroke-width="3" fill="none"/>
+<path d="M967 89L974 102L990 96L1004 94L1018 96L1034 102L1041 89" fill="none" stroke="#d9dcda" stroke-width="2"/>
+<text x="888" y="162" fill="#d9dcda" font-family="Arial" font-size="18">270</text><rect x="1060" y="139" width="64" height="25" fill="#040a10" stroke="#e6d34c" stroke-width="2"/><text x="1065" y="158" fill="#2cf525" font-family="Arial" font-size="17">38000</text>
+<text x="891" y="264" fill="#d9dcda" font-family="Arial" font-size="13">68%</text><rect x="925" y="253" width="67" height="10" rx="2" fill="#26313b"/><rect x="925" y="253" width="46" height="10" rx="2" fill="url(#throttle)"/>
+<text x="1005" y="264" fill="#d9dcda" font-family="Arial" font-size="13">68%</text><rect x="1039" y="253" width="75" height="10" rx="2" fill="#26313b"/><rect x="1039" y="253" width="51" height="10" rx="2" fill="url(#throttle)"/>
+<text x="893" y="290" fill="#d9dcda" font-family="Arial" font-size="14">FUEL 82%</text><text x="1017" y="290" fill="#d9dcda" font-family="Arial" font-size="14">V/S +1200</text></g>
+</svg>

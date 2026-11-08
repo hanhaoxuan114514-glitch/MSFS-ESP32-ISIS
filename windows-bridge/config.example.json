@@ -1,0 +1,8 @@
+{
+  "dll": "D:/Application/MSFS/BeyondATC/BeyondATC_Data/Plugins/x86_64/SimConnect.dll",
+  "port": "COM6",
+  "hz": 20,
+  "baud": 115200,
+  "pitch_sign": -1,
+  "bank_sign": -1
+}
