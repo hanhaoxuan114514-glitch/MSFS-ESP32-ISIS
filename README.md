@@ -5,6 +5,7 @@
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-480%C3%97480-E7352C">
   <img alt="USB" src="https://img.shields.io/badge/Connection-USB-21A98C">
   <img alt="LVGL 8.4" src="https://img.shields.io/badge/LVGL-8.4-6875D9">
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-21A98C"></a>
 </p>
 
 # A350 ISIS · 实体飞行仪表
@@ -128,4 +129,4 @@ python -m unittest discover -s tests -p "test_*.py" -v
 
 感谢 Waveshare、Espressif、LVGL、Python 和 pyserial 项目提供基础组件。第三方来源与许可见 [第三方组件说明](THIRD_PARTY_NOTICES.md)。
 
-本项目自有代码的开源许可证尚未选定；仓库上传不表示已授予开源许可。项目与 Microsoft、Airbus、iniBuilds 或 Waveshare 无官方隶属关系。
+本项目自有代码采用 **[MIT License](LICENSE)**。第三方组件和衍生代码保留各自的许可证与版权声明，详见 [第三方组件说明](THIRD_PARTY_NOTICES.md)。项目与 Microsoft、Airbus、iniBuilds 或 Waveshare 无官方隶属关系。

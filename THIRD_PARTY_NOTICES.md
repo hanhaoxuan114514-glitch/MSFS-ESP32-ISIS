@@ -6,4 +6,4 @@
 - SimConnect.dll 由用户已有的 Microsoft Flight Simulator 兼容软件或 SDK 提供。本仓库不分发该 DLL。
 - A350、MSFS 和 Waveshare 等名称用于说明兼容对象，不代表本项目获得相应厂商认可或属于官方产品。
 
-本项目自有代码的开源许可证尚未选定。上传源码不自动授予第三方开源授权。
+本项目自有代码采用根目录 [MIT License](LICENSE)。MIT 许可不替代第三方组件及衍生部分的原始许可；对应版权、归属和许可条件继续保留。
