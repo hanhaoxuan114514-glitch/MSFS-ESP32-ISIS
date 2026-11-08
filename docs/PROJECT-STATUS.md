@@ -21,4 +21,4 @@
 
 ESP-IDF 和编译工具、Python 便携环境、下载与组件缓存、开发日志、完整设备 Flash 备份、用户参考图以及本机部署配置。这些内容保留在开发机本地。
 
-项目目前为开发预览，自有代码采用 [MIT License](../LICENSE)，暂未上传预编译 Release。欢迎通过 Issue 提交机型和板卡差异；提出问题时请附硬件版本、串口状态、机型及可复现步骤。
+项目目前为开发预览，自有代码采用 [MIT License](../LICENSE)。[V1 Release](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/tag/v1.0.0) 提供 Windows x64 便携包、固件包与校验清单。欢迎通过 Issue 提交机型和板卡差异；提出问题时请附硬件版本、串口状态、机型及可复现步骤。

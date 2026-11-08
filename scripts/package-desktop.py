@@ -13,6 +13,12 @@ bridge = bundle / 'windows-bridge'
 bridge.mkdir(exist_ok=True)
 for name in ('bridge.py', 'config.example.json'):
     shutil.copy2(root / 'windows-bridge' / name, bridge / name)
+config=json.loads((bridge/'config.example.json').read_text(encoding='utf-8-sig'))
+config['dll']=None
+(bridge/'config.example.json').write_text(json.dumps(config,indent=2)+'\n',encoding='utf-8')
+for name in ('LICENSE','THIRD_PARTY_NOTICES.md'):
+    shutil.copy2(root/name,bundle/name)
+shutil.copy2(root/'windows-bridge/LICENSE.pyserial',bridge/'LICENSE.pyserial')
 ignore = shutil.ignore_patterns('__pycache__', '*.pyc', 'include', 'libs', 'Tools')
 shutil.copytree(root / 'tools/python311/tools', bundle / 'tools/python311/tools',
                 ignore=ignore, dirs_exist_ok=True)
@@ -31,10 +37,13 @@ for name in ('serial', 'pyserial-3.5.dist-info'):
 请保留 tools 和 windows-bridge 文件夹；日志及设置会写在本文件夹 logs 下。
 Windows .NET Framework 使用系统现有版本，不需要额外安装。
 
-SimConnect.dll 继续只读使用本机已有文件：
-D:\\Application\\MSFS\\BeyondATC\\BeyondATC_Data\\Plugins\\x86_64\\SimConnect.dll
-没有复制此第三方 DLL；如将来移除 BeyondATC，需更新 windows-bridge/config.example.json 的 dll 路径。
+SimConnect.dll 不包含在包内。程序会尝试发现本机已有的 BeyondATC / Volanta DLL；
+如果无法发现，请编辑 windows-bridge/config.example.json，把 dll 改为原生 x64 DLL 的绝对路径。
+如使用管理员权限运行游戏，请确认助手具有访问同一游戏会话的权限。
 无需 Wi-Fi，无需向模拟器安装额外插件。
+
+自有代码采用 MIT 许可。Python、pyserial 等第三方运行时保留各自许可，见 LICENSE、
+THIRD_PARTY_NOTICES.md、tools/python311/tools/LICENSE.txt 和 windows-bridge/LICENSE.pyserial。
 ''', encoding='utf-8-sig')
 files = sorted(p for p in bundle.rglob('*') if p.is_file() and p.name != 'package-manifest.json')
 manifest = {p.relative_to(bundle).as_posix(): {'bytes': p.stat().st_size,

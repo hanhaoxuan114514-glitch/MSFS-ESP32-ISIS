@@ -14,7 +14,19 @@
 
 本项目使用 **Waveshare ESP32-S3 4 英寸 LCD**，通过 **USB 有线连接**显示实时姿态、空速、高度、航向和辅助 HUD；配套 Windows 桌面助手负责连接、停止和托盘后台控制。界面以 A350 ISIS 备用仪表为设计参考，并加入适合日常模拟飞行的油门、反推、油量和垂直速度显示。
 
-> 当前适配的是已验证的 **无触摸设备、480 × 480 方形屏幕、180° 安装方向**。封面为设计示意图，不是实物照片。本仓库提供源码，暂未提供 GitHub Release 安装包。
+> 当前适配的是已验证的 **无触摸设备、480 × 480 方形屏幕、180° 安装方向**。封面为设计示意图，不是实物照片。
+
+## 下载 V1
+
+**[前往 V1 发布页](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/tag/v1.0.0)**
+
+| 下载 | 用途 |
+| --- | --- |
+| [Windows x64 便携包](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v1.0.0/MyHud-Windows-x64-v1.0.0.zip) | 含助手、Python 与串口库，解压后打开 EXE |
+| [ESP32-S3 固件包](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v1.0.0/ESP32S3-ISIS-Firmware-v1.0.0.zip) | 含应用、引导程序、分区表及中文烧录说明 |
+| [SHA-256 校验文件](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v1.0.0/SHA256SUMS.txt) | 核对下载文件完整性 |
+
+SimConnect.dll 需由用户自己的兼容安装或 SDK 提供。固件包只适用于已确认的硬件配置；四发机型实物显示仍待验收。
 
 ## 功能一览
 

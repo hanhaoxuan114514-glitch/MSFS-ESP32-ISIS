@@ -58,7 +58,7 @@ windows-bridge/config.example.json
 python scripts/package-desktop.py
 ```
 
-输出 `artifacts/MyHud-portable/` 和 `artifacts/MyHud-portable.zip`。打包包含本地 Python 与串口库，但不包含 SimConnect.dll；分发时需保留各运行时与第三方库原有许可。运行包尚未作为 GitHub Release 发布。
+输出 `artifacts/MyHud-portable/` 和 `artifacts/MyHud-portable.zip`。打包包含本地 Python 与串口库，但不包含 SimConnect.dll；运行时与第三方库原有许可随包保留。随后运行 `python scripts/package-release.py` 可生成 V1 命名的运行包、固件包和 SHA-256 清单。预编译包见 [V1 Release](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/tag/v1.0.0)。
 
 ## 图形资源与测试
 
