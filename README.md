@@ -12,21 +12,21 @@
 
 把 MSFS 2024 的飞行数据，带到桌面上的一块真实屏幕。
 
-本项目使用 **Waveshare ESP32-S3 4 英寸 LCD**，通过 **USB 有线连接**显示实时姿态、空速、高度、航向和辅助 HUD；配套 Windows 桌面助手负责连接、停止和托盘后台控制。界面以 A350 ISIS 备用仪表为设计参考，并加入适合日常模拟飞行的油门、反推、油量和垂直速度显示。
+本项目使用 **Waveshare ESP32-S3 4 英寸 LCD**，通过 **USB 有线或蓝牙 BLE**显示实时姿态、空速、高度、航向和辅助 HUD；配套 Windows 桌面助手负责连接、停止和托盘后台控制。界面以 A350 ISIS 备用仪表为设计参考，并加入适合日常模拟飞行的油门、反推、油量和垂直速度显示。
 
 > 当前适配的是已验证的 **无触摸设备、480 × 480 方形屏幕、180° 安装方向**。封面为设计示意图，不是实物照片。
 
-## 下载 V1
+## 下载 V2
 
-**[前往 V1 发布页](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/tag/v1.0.0)**
+**[前往 V2 发布页](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/tag/v2.0.0)**
 
 | 下载 | 用途 |
 | --- | --- |
-| [Windows x64 便携包](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v1.0.0/MyHud-Windows-x64-v1.0.0.zip) | 含助手、Python 与串口库，解压后打开 EXE |
-| [ESP32-S3 固件包](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v1.0.0/ESP32S3-ISIS-Firmware-v1.0.0.zip) | 含应用、引导程序、分区表及中文烧录说明 |
-| [SHA-256 校验文件](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v1.0.0/SHA256SUMS.txt) | 核对下载文件完整性 |
+| [Windows x64 便携包](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v2.0.0/MyHud-Windows-x64-v2.0.0.zip) | 含助手、Python、串口和蓝牙库，解压后打开 EXE |
+| [ESP32-S3 固件包](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v2.0.0/ESP32S3-ISIS-Firmware-v2.0.0.zip) | 含应用、引导程序、分区表及中文烧录说明 |
+| [SHA-256 校验文件](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v2.0.0/SHA256SUMS.txt) | 核对下载文件完整性 |
 
-SimConnect.dll 需由用户自己的兼容安装或 SDK 提供。固件包只适用于已确认的硬件配置；四发机型实物显示仍待验收。
+SimConnect.dll 需由用户自己的兼容安装或 SDK 提供。固件包只适用于已确认的硬件配置；从 V1 升级并使用 BLE 或实体屏幕 ADS-B 时，请使用 V2 固件。
 
 ## 功能一览
 
@@ -49,7 +49,7 @@ SimConnect.dll 需由用户自己的兼容安装或 SDK 提供。固件包只适
 flowchart LR
     A[MSFS 2024] -->|只读 SimConnect| B[Windows 桥接]
     C[桌面助手 / 系统托盘] -->|开启与停止| B
-    B -->|USB 串口 · JSON| D[ESP32-S3]
+    B -->|USB 串口或蓝牙 BLE| D[ESP32-S3]
     D --> E[480 × 480 LCD]
 ```
 
@@ -65,6 +65,18 @@ flowchart LR
 4. 关闭窗口后助手会收到托盘；右键托盘可开启、停止或退出。
 
 请保留运行包里的 `tools` 和 `windows-bridge` 文件夹。**源码压缩包不等于便携运行包**：本仓库不包含 Python、ESP-IDF 工具链或本机生成的 EXE。
+
+### 蓝牙连接
+
+新版助手可直接选择 **USB 有线** 或 **蓝牙 BLE**。蓝牙模式自动搜索 `MyHud BLE`，需要刷入支持 BLE 的屏幕固件。运行中切换模式时，助手会重新连接。屏幕可继续用 USB 供电。工作目录的 `MyHud BLE.cmd` 也可以单独启动蓝牙桥接。
+
+### 实时飞机雷达
+
+在助手左侧选择 **ADS-B 雷达**，电脑和实体屏幕会切到雷达。屏幕顶部显示 MSFS 当前飞机的高度、指示空速和剩余油量，雷达目标来自选定位置周围的真实飞机。
+
+地图支持拖动、滚轮缩放和点击选点，使用在线街道图，离线时显示缓存瓦片或简化地图。地点索引可按机场代码或城市名搜索，包含 OurAirports 和 GeoNames 的城市、机场数据。图钉记录在助手目录的 `logs/radar-airports.json`。点击左侧 **HUD 仪表** 可切回仪表。街道图和 ADS‑B 目标需要电脑联网。主题强调色可在左下角的设置中选择。地点索引文件为 `windows-bridge/map/places.tsv`（约 18.8 MB），位于工作目录和 MyHud 安装目录中。
+
+卫星底图来自 [NASA Earth Observatory 的 Blue Marble](https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/)。原图（21,600 × 10,800，约 27.2 MB）位于工作目录的 `downloads/map/nasa-blue-marble-july-21600.jpg`。项目保留按缩放级别分片的 `windows-bridge/map/blue-marble.zip`（约 33.1 MB），安装副本位于 `D:\Application\MSFS\MyHud\windows-bridge\map\blue-marble.zip`。
 
 ### 从源码运行桥接
 

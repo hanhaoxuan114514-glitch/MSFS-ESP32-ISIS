@@ -16,6 +16,10 @@ internal static class IdentityTests
         string python = root + @"\tools\python311\tools\python.exe";
         string command = "\"" + python + "\" -u \"" + script + "\" --port COM6";
         Check(ProcessIdentity.IsProjectBridge(root, started, started, python, command), "project process accepted");
+        Check(ProcessIdentity.BridgeMode(root, started, started, python, command)=="usb", "USB mode detected");
+        string bluetooth = root + @"\windows-bridge\ble_bridge.py";
+        Check(ProcessIdentity.BridgeMode(root, started, started, python, "python.exe -u \"" + bluetooth + "\" --status")=="ble",
+              "BLE mode detected");
         Check(!ProcessIdentity.IsProjectBridge(root, started, started.AddSeconds(1), python, command), "reused PID rejected");
         Check(!ProcessIdentity.IsProjectBridge(root, started, started, @"C:\Other\python.exe", command), "foreign interpreter rejected");
         Check(!ProcessIdentity.IsProjectBridge(root, started, started, python, "python.exe unrelated.py --label \"" + script + ".bak\""), "substring is not script argument");

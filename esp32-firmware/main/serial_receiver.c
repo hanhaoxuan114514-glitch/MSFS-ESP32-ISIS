@@ -5,6 +5,7 @@
 #include "driver/usb_serial_jtag.h"
 #include "esp_log.h"
 #include "flight_data.h"
+#include "radar_data.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -26,7 +27,7 @@ static void receiver_task(void *arg)
             if (c == '\n') {
                 if (!discard && used != 0) {
                     line[used] = '\0';
-                    flight_data_accept_line(line, used);
+                    if(!radar_accept_line(line,used)) flight_data_accept_line(line,used);
                 }
                 used = 0;
                 discard = false;
@@ -65,8 +66,8 @@ esp_err_t serial_receiver_start(void)
             err = ESP_OK;
         }
     }
-    if (err == ESP_OK && xTaskCreate(receiver_task, "flight_usb_rx", 6144, NULL,
-                                    tskIDLE_PRIORITY + 2, NULL) != pdPASS) {
+    if (err == ESP_OK && xTaskCreatePinnedToCore(receiver_task, "flight_usb_rx", 6144, NULL,
+                                                tskIDLE_PRIORITY + 2, NULL, 0) != pdPASS) {
         err = ESP_ERR_NO_MEM;
     }
     /* 即使创建任务失败也保留已安装驱动，避免改变共享 USB 日志状态。 */

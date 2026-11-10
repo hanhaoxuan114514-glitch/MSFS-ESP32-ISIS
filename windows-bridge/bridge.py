@@ -34,22 +34,84 @@ VARIABLES = [
     ('throttle4_pct', 'GENERAL ENG THROTTLE LEVER POSITION:4', 'percent'),
     ('reverse3_pct', 'TURB ENG REVERSE NOZZLE PERCENT:3', 'percent'),
     ('reverse4_pct', 'TURB ENG REVERSE NOZZLE PERCENT:4', 'percent'),
+    ('flaps_index', 'FLAPS HANDLE INDEX', 'number'),
+    ('flaps_positions', 'FLAPS NUM HANDLE POSITIONS', 'number'),
+    ('tas_kt', 'AIRSPEED TRUE', 'knots'),
+    ('engine_type', 'ENGINE TYPE', 'number'),
+    ('vs0_kt', 'DESIGN SPEED VS0', 'knots'),
+    ('flap_limit_kt', 'FLAPS CURRENT SPEED LIMITATION', 'knots'),
+    ('overspeed_kt', 'AIRSPEED BARBER POLE', 'knots'),
+    ('prop_rpm', 'PROP RPM:1', 'rpm'),
+    ('prop_rpm_pct', 'PROP MAX RPM PERCENT:1', 'percent'),
+    ('agl_ft', 'PLANE ALT ABOVE GROUND', 'feet'),
+    *[(f'prop_rpm{suffix}_{engine}', f'{name}:{engine}', unit)
+      for engine in range(2, 5)
+      for suffix, name, unit in (('', 'PROP RPM', 'rpm'), ('_pct', 'PROP MAX RPM PERCENT', 'percent'))],
+    ('ground_speed_kt', 'GROUND VELOCITY', 'knots'),
+    ('rotor_pct', 'ROTOR RPM PCT:0', 'percent'),
+    ('collective_pct', 'ROTOR COLLECTIVE BLADE PITCH PCT', 'percent'),
+    ('wind_kt', 'AMBIENT WIND VELOCITY', 'knots'),
+    ('aoa_deg', 'INCIDENCE ALPHA', 'degrees'),
+    ('trim_pct', 'ELEVATOR TRIM PCT EX2', 'percent'),
+    ('flap_deg', 'TRAILING EDGE FLAPS LEFT ANGLE', 'degrees'),
+    ('rotor_count', 'NUMBER OF MAIN ROTORS', 'number'),
+    ('rotor1_rpm', 'ROTOR RPM:1', 'rpm'),
+    ('rotor2_rpm', 'ROTOR RPM:2', 'rpm'),
+    ('rotor2_pct', 'ROTOR RPM PCT:2', 'percent'),
+    *[(f'{key}_{engine}', f'{name}:{engine}', unit)
+      for engine in range(1, 5)
+      for key, name, unit in (('power', 'TURB ENG MAX TORQUE PERCENT', 'percent'),
+                              ('eng_rpm', 'GENERAL ENG RPM', 'rpm'),
+                              ('eng_pct', 'GENERAL ENG PCT MAX RPM', 'percent'))],
+    ('g_load', 'G FORCE', 'GForce'),
+    ('parking_brake', 'BRAKE PARKING POSITION', 'bool'),
+    ('parking_brake_available', 'PARKING BRAKE AVAILABLE', 'bool'),
+    ('left_brake', 'BRAKE LEFT POSITION', 'position 32k'),
+    ('right_brake', 'BRAKE RIGHT POSITION', 'position 32k'),
 ]
 RANGES = dict(pitch_deg=(-90, 90), bank_deg=(-180, 180), ias_kt=(0, 1500),
               altitude_ft=(-2000, 100000), heading_deg=(0, 360),
-              vertical_speed_fpm=(-30000, 30000), qnh_hpa=(700, 1200),
+              vertical_speed_fpm=(-150000, 150000), qnh_hpa=(700, 1200),
               mach=(0, 5), latitude_deg=(-90, 90), longitude_deg=(-180, 180),
               throttle1_pct=(-100,100), throttle2_pct=(-100,100),
               reverse1_pct=(0,100), reverse2_pct=(0,100))
 
 
-def normalize(values, pitch_sign=-1, bank_sign=-1):
+def aircraft_kind(engine_type, aircraft_class, category, sim_category):
+    kinds = {
+        'helicopter': 2, 'rotorcraft': 2, 'glider': 3, 'sailplane': 3,
+        'airship': 4, 'hotairballoon': 5, 'balloon': 5, 'lighterthanair': 6,
+        'gyroplane': 7, 'tiltrotor': 8, 'ornithopter': 9,
+    }
+    for value in (category, sim_category, aircraft_class):
+        key = ''.join(c for c in value.lower() if c.isalnum())
+        if key in kinds and kinds[key] != 6:
+            return kinds[key]
+    if aircraft_class.upper() == 'LIGHTERTHANAIR':
+        return 6
+    if aircraft_class.upper() == 'OTHER':
+        return 10
+    return {1: 0, 0: 1, 5: 1, 3: 2, 6: 11}.get(engine_type, 10)
+
+
+def normalize(values, pitch_sign=-1, bank_sign=-1, aircraft_class='', category='', sim_category='',
+              aircraft_title='', flap_limits=None, observed_flap_positions=0):
     if len(values) != len(VARIABLES):
         raise ValueError('wrong SimConnect datum count')
     data = dict(zip((v[0] for v in VARIABLES), values))
     if not math.isfinite(data['on_ground']):
         raise ValueError('invalid on_ground')
     data['on_ground'] = data['on_ground'] != 0
+    g_load = data.pop('g_load')
+    if -99.9 <= g_load <= 99.9:
+        data['g_load'] = round(g_load, 2)
+    parking_brake = data.pop('parking_brake')
+    parking_available = data.pop('parking_brake_available')
+    wheel_brakes = (data.pop('left_brake'), data.pop('right_brake'))
+    if math.isfinite(parking_available) and parking_available != 0 and math.isfinite(parking_brake):
+        data['parking_brake'] = parking_brake != 0
+        # Ignore the first 1% of pedal travel to avoid flicker from noisy axes.
+        data['wheel_brake'] = any(327.67 < position <= 32768 for position in wheel_brakes)
     data['pitch_deg'] *= pitch_sign
     data['bank_deg'] *= bank_sign
     if math.isfinite(data['heading_deg']):
@@ -57,7 +119,8 @@ def normalize(values, pitch_sign=-1, bank_sign=-1):
     for key, (low, high) in RANGES.items():
         value = data[key]
         if isinstance(value, bool) or not math.isfinite(value) or not low <= value <= high:
-            if key in ('mach', 'latitude_deg', 'longitude_deg', 'throttle1_pct', 'throttle2_pct', 'reverse1_pct', 'reverse2_pct'):
+            if key in ('vertical_speed_fpm', 'mach', 'latitude_deg', 'longitude_deg',
+                       'throttle1_pct', 'throttle2_pct', 'reverse1_pct', 'reverse2_pct'):
                 data.pop(key)
             else:
                 raise ValueError('invalid ' + key)
@@ -77,6 +140,77 @@ def normalize(values, pitch_sign=-1, bank_sign=-1):
     quantity, capacity = data.pop('fuel_quantity'), data.pop('fuel_capacity')
     if math.isfinite(quantity) and math.isfinite(capacity) and capacity > 0 and 0 <= quantity <= capacity:
         data['fuel_pct'] = 100 * quantity / capacity
+    index, positions = data.pop('flaps_index'), data.pop('flaps_positions')
+    if math.isfinite(positions) and 1 <= positions <= 32 and positions == int(positions):
+        observed_flap_positions = max(observed_flap_positions, int(positions))
+    if math.isfinite(index) and 0 <= index < 32 and index == int(index):
+        index = int(index)
+        if index > 0 or observed_flap_positions:
+            data.update(flaps_index=index, flaps_positions=max(observed_flap_positions, index + 1))
+    tas = data['tas_kt']
+    if not math.isfinite(tas) or not 0 <= tas <= 3000:
+        data.pop('tas_kt')
+    engine_type = data.pop('engine_type')
+    kind = aircraft_kind(engine_type, aircraft_class, category, sim_category)
+    if kind == 1 and (not valid_count or count == 0):
+        kind = 10
+    propeller = kind == 1
+    data['aircraft_kind'] = kind
+    data['propeller'] = propeller
+    vs0 = data.pop('vs0_kt')
+    flap_limit = data.pop('flap_limit_kt')
+    if 0 < vs0 <= 1500:
+        data['vs0_kt'] = round(vs0, 1)
+        detent = data.get('flaps_index')
+        if aircraft_title and flap_limits is not None and detent is not None:
+            if detent > 0 and vs0 < flap_limit <= 1500:
+                flap_limits[detent] = flap_limit
+            elif not vs0 < flap_limit <= 1500:
+                lookup = detent if detent > 0 else data['flaps_positions'] - 1
+                flap_limit = flap_limits.get(lookup, 0)
+        if vs0 < flap_limit <= 1500:
+            data['flap_limit_kt'] = round(flap_limit, 1)
+    if not 0 < data['overspeed_kt'] <= 1500:
+        data.pop('overspeed_kt')
+    for engine in range(1, 5):
+        suffix = '' if engine == 1 else f'_{engine}'
+        for field, maximum, precision in (('prop_rpm', 15000, 0), ('prop_rpm_pct', 200, 1)):
+            key = field + suffix
+            value = data[key]
+            if kind == 4:
+                value = data[f'eng_{"rpm" if field == "prop_rpm" else "pct"}_{engine}']
+            if (propeller or kind == 4) and valid_count and engine <= count and 0 <= value <= maximum:
+                data[key] = round(value, precision)
+            else:
+                data.pop(key)
+        data.pop(f'eng_rpm_{engine}')
+        data.pop(f'eng_pct_{engine}')
+        power = data.pop(f'power_{engine}')
+        if kind in (2, 7, 8) and valid_count and engine <= count and 0 <= power <= 200:
+            data[f'power_{engine}'] = round(power, 1)
+    rotor_count = data.pop('rotor_count')
+    if kind in (2, 7, 8) and rotor_count in (1, 2):
+        data['rotor_count'] = int(rotor_count)
+    for key, low, high, enabled in (
+        ('aoa_deg', -90, 90, propeller), ('trim_pct', -100, 100, propeller),
+        ('flap_deg', 0, 90, propeller and positions > 1),
+        ('rotor1_rpm', 0, 3000, rotor_count in (1, 2) and kind in (2, 7, 8)),
+        ('rotor2_rpm', 0, 3000, rotor_count == 2 and kind in (2, 7, 8)),
+        ('rotor2_pct', 0, 200, rotor_count == 2 and kind in (2, 7, 8)),
+    ):
+        value = data.pop(key)
+        if enabled and low <= value <= high:
+            data[key] = round(value, 1)
+    agl = data.pop('agl_ft')
+    if data['on_ground']:
+        data['agl_ft'] = 0
+    elif 0 <= agl <= 200000:
+        data['agl_ft'] = round(agl)
+    for key, maximum in (('ground_speed_kt', 2000), ('rotor_pct', 200),
+                         ('collective_pct', 100), ('wind_kt', 300)):
+        value = data.pop(key)
+        if 0 <= value <= maximum and (key not in ('rotor_pct', 'collective_pct') or kind in (2, 7, 8)):
+            data[key] = round(value, 1)
     return data
 
 
@@ -94,6 +228,11 @@ class Protocol:
         if data is not None:
             packet.update(data)
         line = json.dumps(packet, separators=(',', ':'), allow_nan=False).encode('ascii')
+        if len(line) > 1024:
+            # Four-engine frames can exceed the USB limit with full float precision.
+            compact = {key: round(value, 4) if isinstance(value, float) else value
+                       for key, value in packet.items()}
+            line = json.dumps(compact, separators=(',', ':'), allow_nan=False).encode('ascii')
         if len(line) > 1024:
             raise ValueError('packet exceeds 1024 bytes')
         self.seq += 1
@@ -125,10 +264,19 @@ class SimConnect:
             fn = getattr(self.dll, 'SimConnect_' + name)
             fn.argtypes, fn.restype = args, C.c_int32
         self.handle = handle()
+        self.aircraft_class = self.category = self.sim_category = self.aircraft_title = ''
+        self.flap_limits = {}
+        self.observed_flap_positions = 0
+        self.smoothed_aoa = None
         try:
             self.call('Open', C.byref(self.handle), b'A359 USB read-only', None, 0, None, 0)
             for _, name, unit in VARIABLES:
                 self.call('AddToDataDefinition', self.handle, 1, name.encode(), unit.encode(), 4, 0, 0xffffffff)
+            for name in (b'AIRCRAFT OBJECT CLASS', b'AIRCRAFT CATEGORY', b'CATEGORY'):
+                self.call('AddToDataDefinition', self.handle, 2, name, None, 6, 0, 0xffffffff)
+            self.call('AddToDataDefinition', self.handle, 2, b'TITLE', None, 8, 0, 0xffffffff)
+            # Fixed strings in a separate, once-per-second definition.
+            self.call('RequestDataOnSimObject', self.handle, 2, 2, 0, 4, 0, 0, 0, 0)
             # USER=0, SIM_FRAME=3, flags=0: all data including unchanged values.
             self.call('RequestDataOnSimObject', self.handle, 1, 1, 0, 3, 0, 0, 0, 0)
         except Exception:
@@ -167,7 +315,25 @@ class SimConnect:
                     if flags or count != len(VARIABLES) or len(raw) < 40 + count * 8:
                         raise OSError('unexpected SimConnect data layout')
                     latest = struct.unpack_from('<' + 'd' * count, raw, 40)
+                elif request == 2 and definition == 2 and not flags and count == 4 and len(raw) >= 264:
+                    previous_title = getattr(self, 'aircraft_title', '')
+                    self.aircraft_class, self.category, self.sim_category, self.aircraft_title = (
+                        raw[start:end].split(b'\0', 1)[0].decode('utf-8', 'replace').strip()
+                        for start,end in ((40,72),(72,104),(104,136),(136,264)))
+                    if previous_title != self.aircraft_title:
+                        self.flap_limits = {}
+                        self.observed_flap_positions = 0
+                        self.smoothed_aoa = None
+                        latest = None
         return latest
+
+    def smooth_aoa(self, data, elapsed):
+        aoa = data.get('aoa_deg')
+        if aoa is not None and self.smoothed_aoa is not None and 0 <= elapsed <= 1:
+            aoa = self.smoothed_aoa + (aoa - self.smoothed_aoa) * -math.expm1(-elapsed / 0.3)
+        self.smoothed_aoa = aoa
+        if aoa is not None:
+            data['aoa_deg'] = round(aoa, 2)
 
     def close(self):
         if self.handle.value:
@@ -228,6 +394,8 @@ def main(argv=None):
     parser.add_argument('--config', type=Path, help='JSON configuration; command line overrides it')
     parser.add_argument('--dll', help='absolute path to existing native x64 SimConnect.dll')
     parser.add_argument('--port', help='USB port, e.g. COM6; omitted = print JSON only')
+    parser.add_argument('--radar-config', type=Path, help='desktop radar location and mode')
+    parser.add_argument('--allow-no-sim', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--hz', type=float, default=20)
     parser.add_argument('--baud', type=int, default=115200)
     parser.add_argument('--once', action='store_true', help='print one live frame, never open USB')
@@ -247,8 +415,12 @@ def main(argv=None):
     if args.pitch_sign not in (-1, 1) or args.bank_sign not in (-1, 1):
         parser.error('attitude signs must be -1 or 1')
     dll = args.dll or discover_dll()
-    if not dll or not Path(dll).is_absolute():
+    if (not dll or not Path(dll).is_absolute()) and not (args.radar_config or args.allow_no_sim):
         parser.error('native SimConnect DLL missing: supply --dll ABSOLUTE_PATH')
+    radar = None
+    if args.radar_config and args.port and not args.once:
+        from radar_feed import RadarFeed
+        radar = RadarFeed(args.radar_config)
     protocol, sim, usb = Protocol(), None, None
     device_log = DeviceLog()
     data, last_data, retry, usb_retry = None, 0, 0, 0
@@ -276,6 +448,11 @@ def main(argv=None):
                 line = protocol.line(frame)
                 if usb.write(line) != len(line):
                     raise OSError('short USB write')
+                radar_packet = radar.packet() if radar else None
+                if radar_packet:
+                    radar_line = b'RADAR ' + radar_packet.hex().encode('ascii') + b'\n'
+                    if usb.write(radar_line) != len(radar_line):
+                        raise OSError('short USB radar write')
             except OSError as exc:
                 print(f'USB disconnected: {exc}', file=sys.stderr)
                 usb.close()
@@ -289,7 +466,7 @@ def main(argv=None):
             emit(None)
         while True:
             tick = time.monotonic()
-            if sim is None and tick >= retry:
+            if dll and sim is None and tick >= retry:
                 try:
                     sim = SimConnect(dll)
                     last_data = tick
@@ -301,7 +478,12 @@ def main(argv=None):
                 try:
                     values = sim.poll()
                     if values is not None:
-                        data = normalize(values, args.pitch_sign, args.bank_sign)
+                        data = normalize(values, args.pitch_sign, args.bank_sign,
+                                         sim.aircraft_class, sim.category, sim.sim_category, sim.aircraft_title,
+                                         sim.flap_limits, sim.observed_flap_positions)
+                        if sim.aircraft_title:
+                            sim.observed_flap_positions = data.get('flaps_positions', sim.observed_flap_positions)
+                        sim.smooth_aoa(data, tick - last_data)
                         last_data = tick
                     if tick - (last_data or started) > 1.2:
                         raise OSError('no fresh simulator data for 1.2 s')
@@ -328,6 +510,8 @@ def main(argv=None):
     except KeyboardInterrupt:
         return 0
     finally:
+        if radar:
+            radar.close()
         if not args.once:
             emit(None)
         if sim:

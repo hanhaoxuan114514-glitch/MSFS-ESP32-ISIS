@@ -220,7 +220,6 @@ static bool decode(const cJSON *root, flight_data_t *out, char session[33])
         !number(root, "ias_kt", 0, 1500, required, &out->ias_kt) ||
         !number(root, "altitude_ft", -2000, 100000, required, &out->altitude_ft) ||
         !number(root, "heading_deg", 0, 360, required, &out->heading_deg) ||
-        !number(root, "vertical_speed_fpm", -30000, 30000, required, &out->vertical_speed_fpm) ||
         !number(root, "qnh_hpa", 700, 1200, required, &out->qnh_hpa) ||
         !boolean(root, "on_ground", required, &out->on_ground) ||
         !number(root, "mach", 0, 5, false, &out->mach) ||
@@ -230,6 +229,47 @@ static bool decode(const cJSON *root, flight_data_t *out, char session[33])
         return false;
     }
     out->mach_valid = cJSON_GetObjectItemCaseSensitive(root, "mach") != NULL;
+    out->parking_brake_valid = boolean(root, "parking_brake", true, &out->parking_brake);
+    boolean(root, "wheel_brake", false, &out->wheel_brake);
+    out->vertical_speed_valid = number(root, "vertical_speed_fpm", -150000, 150000, true,
+                                       &out->vertical_speed_fpm);
+    out->g_load_valid = number(root, "g_load", -99.9, 99.9, true, &out->g_load);
+    out->tas_valid = cJSON_GetObjectItemCaseSensitive(root, "tas_kt") != NULL &&
+                     number(root, "tas_kt", 0, 3000, false, &out->tas_kt);
+    double vs0=0, flap_limit=0;
+    if(number(root,"vs0_kt",0,1500,false,&vs0)) out->vs0_kt=vs0;
+    if(number(root,"flap_limit_kt",0,1500,false,&flap_limit) && vs0>0 && flap_limit>vs0) {
+        out->flap_limit_kt=flap_limit;
+    }
+    number(root,"overspeed_kt",0,1500,false,&out->overspeed_kt);
+    boolean(root,"propeller",false,&out->propeller);
+    double kind=out->propeller?AIRCRAFT_PROP:AIRCRAFT_JET;
+    if(number(root,"aircraft_kind",0,AIRCRAFT_ELECTRIC,false,&kind) && floor(kind)==kind)
+        out->aircraft_kind=(aircraft_kind_t)kind;
+    else
+        out->aircraft_kind=out->propeller?AIRCRAFT_PROP:AIRCRAFT_JET;
+    out->ground_speed_valid=cJSON_GetObjectItemCaseSensitive(root,"ground_speed_kt") &&
+                            number(root,"ground_speed_kt",0,2000,false,&out->ground_speed_kt);
+    out->rotor_valid=cJSON_GetObjectItemCaseSensitive(root,"rotor_pct") &&
+                     number(root,"rotor_pct",0,200,false,&out->rotor_pct);
+    out->collective_valid=cJSON_GetObjectItemCaseSensitive(root,"collective_pct") &&
+                          number(root,"collective_pct",0,100,false,&out->collective_pct);
+    out->wind_valid=cJSON_GetObjectItemCaseSensitive(root,"wind_kt") &&
+                    number(root,"wind_kt",0,300,false,&out->wind_kt);
+    double rotors=0;
+    if(number(root,"rotor_count",0,2,false,&rotors) && floor(rotors)==rotors)
+        out->rotor_count=(uint8_t)rotors;
+    static const struct { const char *key; double low,high; } details[DETAIL_COUNT]={
+        {"aoa_deg",-90,90},{"trim_pct",-100,100},{"flap_deg",0,90},{"rotor1_rpm",0,3000},
+        {"rotor2_rpm",0,3000},{"rotor2_pct",0,200},{"power_1",0,200},{"power_2",0,200},
+        {"power_3",0,200},{"power_4",0,200}
+    };
+    for(unsigned i=0;i<DETAIL_COUNT;i++)
+        if(cJSON_GetObjectItemCaseSensitive(root,details[i].key) &&
+           number(root,details[i].key,details[i].low,details[i].high,false,&out->details[i]))
+            out->detail_valid|=1u<<i;
+    out->agl_valid=cJSON_GetObjectItemCaseSensitive(root,"agl_ft") &&
+                   number(root,"agl_ft",0,200000,false,&out->agl_ft);
     double engines=2;
     if(!number(root,"engine_count",0,4,false,&engines) || floor(engines)!=engines) return false;
     out->engine_count=(uint8_t)engines;
@@ -240,8 +280,29 @@ static bool decode(const cJSON *root, flight_data_t *out, char session[33])
            !number(root,reverse,0,100,false,&out->reverse_pct[i])) return false;
         out->engine_valid[i]=i<out->engine_count && cJSON_GetObjectItemCaseSensitive(root,throttle)!=NULL &&
                              cJSON_GetObjectItemCaseSensitive(root,reverse)!=NULL;
+        if((out->propeller || out->aircraft_kind==AIRCRAFT_AIRSHIP) && i<out->engine_count) {
+            char rpm[20]="prop_rpm", pct[20]="prop_rpm_pct";
+            if(i>0) {
+                snprintf(rpm,sizeof(rpm),"prop_rpm_%u",i+1);
+                snprintf(pct,sizeof(pct),"prop_rpm_pct_%u",i+1);
+            }
+            out->prop_rpm_valid[i]=cJSON_GetObjectItemCaseSensitive(root,rpm) &&
+                                   number(root,rpm,0,15000,false,&out->prop_rpm[i]);
+            out->prop_rpm_pct_valid[i]=cJSON_GetObjectItemCaseSensitive(root,pct) &&
+                                       number(root,pct,0,200,false,&out->prop_rpm_pct[i]);
+        }
     }
     out->fuel_valid = cJSON_GetObjectItemCaseSensitive(root, "fuel_pct") != NULL;
+    double flap_index=0, flap_positions=0;
+    if(cJSON_GetObjectItemCaseSensitive(root,"flaps_index") &&
+       cJSON_GetObjectItemCaseSensitive(root,"flaps_positions") &&
+       number(root,"flaps_index",0,31,false,&flap_index) &&
+       number(root,"flaps_positions",1,32,false,&flap_positions) &&
+       floor(flap_index)==flap_index && floor(flap_positions)==flap_positions &&
+       flap_index<flap_positions) {
+        out->flaps_index=(uint8_t)flap_index;
+        out->flaps_positions=(uint8_t)flap_positions;
+    }
     out->position_valid = cJSON_GetObjectItemCaseSensitive(root, "latitude_deg") != NULL &&
                           cJSON_GetObjectItemCaseSensitive(root, "longitude_deg") != NULL;
     if (out->heading_deg == 360) {
@@ -261,23 +322,11 @@ void flight_data_init(void)
     portEXIT_CRITICAL(&s_lock);
 }
 
-bool flight_data_accept_line(const char *line, size_t length)
+static bool publish(const cJSON *root)
 {
-    if (line == NULL || length == 0 || length > FLIGHT_DATA_MAX_LINE_LENGTH ||
-        memchr(line, '\0', length) != NULL || !strict_json_tokens(line, length)) {
-        return false;
-    }
-    char text[FLIGHT_DATA_MAX_LINE_LENGTH + 1];
-    memcpy(text, line, length);
-    text[length] = '\0';
-    /* 不使用全局错误指针；必须完全消费输入，拒绝尾随内容。 */
-    cJSON *root = cJSON_ParseWithLengthOpts(text, length + 1, NULL, true);
     flight_data_t next = {0};
     char session[33];
-    bool valid = root != NULL && cJSON_IsObject(root) && valid_tree(root) &&
-                 decode(root, &next, session);
-    cJSON_Delete(root);
-    if (!valid) {
+    if (!decode(root, &next, session)) {
         return false;
     }
 
@@ -303,6 +352,64 @@ bool flight_data_accept_line(const char *line, size_t length)
         accepted = true;
     }
     portEXIT_CRITICAL(&s_lock);
+    return accepted;
+}
+
+bool flight_data_accept_line(const char *line, size_t length)
+{
+    if (line == NULL || length == 0 || length > FLIGHT_DATA_MAX_LINE_LENGTH ||
+        memchr(line, '\0', length) != NULL || !strict_json_tokens(line, length)) {
+        return false;
+    }
+    char text[FLIGHT_DATA_MAX_LINE_LENGTH + 1];
+    memcpy(text, line, length);
+    text[length] = '\0';
+    cJSON *root = cJSON_ParseWithLengthOpts(text, length + 1, NULL, true);
+    bool accepted = cJSON_IsObject(root) && valid_tree(root) && publish(root);
+    cJSON_Delete(root);
+    return accepted;
+}
+
+bool flight_data_accept_ble(const uint8_t *packet, size_t length)
+{
+    static const struct {const char *key; unsigned scale; bool boolean;} fields[] = {
+#define NUMBER false
+#define BOOL true
+#define FIELD(key, scale, type) {#key, scale, type},
+#include "ble_fields.def"
+#undef FIELD
+#undef BOOL
+#undef NUMBER
+    };
+    const size_t count = sizeof(fields) / sizeof(fields[0]);
+    // The previous BLE layout ended before g_load.
+    if (!packet || (length != 22 + count * 3 && length != 22 + (count - 1) * 3) ||
+        packet[0] != 1 || packet[1] > 1) return false;
+    const size_t received_fields = (length - 22) / 3;
+    static const char hex[] = "0123456789abcdef";
+    char session[33];
+    for (size_t i = 0; i < 16; ++i) {
+        session[2*i] = hex[packet[2+i] >> 4];
+        session[2*i+1] = hex[packet[2+i] & 15];
+    }
+    session[32] = '\0';
+    uint32_t seq = 0;
+    for (unsigned i = 0; i < 4; ++i) seq |= (uint32_t)packet[18+i] << (8*i);
+    cJSON *root = cJSON_CreateObject();
+    bool valid = root && cJSON_AddNumberToObject(root, "version", 1) &&
+        cJSON_AddNumberToObject(root, "seq", seq) && cJSON_AddStringToObject(root, "session", session) &&
+        cJSON_AddBoolToObject(root, "connected", packet[1]) && cJSON_AddBoolToObject(root, "demo", false);
+    for (size_t i = 0; valid && packet[1] && i < received_fields; ++i) {
+        const uint8_t *p = packet + 22 + 3*i;
+        int32_t value = p[0] | (p[1] << 8) | (p[2] << 16);
+        if (value == 0x800000) continue;
+        if (value > 0x800000) value -= 0x1000000;
+        valid = fields[i].boolean ?
+            (value == 0 || value == 1) && cJSON_AddBoolToObject(root, fields[i].key, value) :
+            cJSON_AddNumberToObject(root, fields[i].key, value / (double)fields[i].scale) != NULL;
+    }
+    bool accepted = valid && publish(root);
+    cJSON_Delete(root);
     return accepted;
 }
 

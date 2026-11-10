@@ -48,13 +48,12 @@ def build_scene(preset='reference'):
                       'font_size': size, 'color': color, 'align': align, 'role': role})
 
     # 发光姿态区的上下边缘带曲率，保留参考图的形状。
-    outline = [(92, 68), (121, 62), (163, 58), (207, 57), (250, 59), (292, 63),
-               (321, 69), (321, 295), (291, 302), (249, 307), (207, 309),
-               (163, 306), (121, 301), (92, 294)]
+    outline = [(92, 69), (120, 62), (163, 58), (207, 57), (251, 58), (294, 62),
+               (322, 69), (322, 297), (294, 304), (251, 308), (207, 309),
+               (163, 308), (120, 304), (92, 297)]
     poly(outline, SKY, role='attitude')
-    poly([(92, horizon), (321, horizon), (321, 295), (291, 302), (249, 307),
-          (207, 309), (163, 306), (121, 301), (92, 294)], GROUND, role='ground')
-    line([(92, horizon), (321, horizon)], WHITE, 2, 'horizon')
+    poly([(92, horizon), (322, horizon), *outline[7:]], GROUND, role='ground')
+    line([(92, horizon), (322, horizon)], WHITE, 2, 'horizon')
 
     for angle in (-15, -12.5, -10, -7.5, -5, -2.5, 2.5, 5, 7.5, 10, 12.5, 15):
         y = horizon - angle * 5.8
@@ -66,17 +65,16 @@ def build_scene(preset='reference'):
             text('10', 146, y-14, 30, 28, 20, role='pitch')
 
     # 横滚弧、刻度及零横滚的上下指针。
-    arc = [(207 + 120*math.sin(math.radians(a)), 197-120*math.cos(math.radians(a)))
-           for a in range(-30, 31, 3)]
-    line(arc, WHITE, 2, 'bank')
-    for angle in (-30, -20, -10, 0, 10, 20, 30):
+    for angles in (range(-30, -5, 3), range(6, 31, 3)):
+        arc = [(207 + 120*math.sin(math.radians(a)), 197-120*math.cos(math.radians(a)))
+               for a in angles]
+        line(arc, WHITE, 2, 'bank')
+    for angle in (-30, -20, -10, 10, 20, 30):
         a = math.radians(angle)
         r = 135 if angle in (-30, 0, 30) else 131
         line([(207+120*math.sin(a), 197-120*math.cos(a)),
               (207+r*math.sin(a), 197-r*math.cos(a))], WHITE, 2, 'bank')
-    line([(112, 101), (122, 111)], WHITE, 2)
-    line([(292, 111), (302, 101)], WHITE, 2)
-    poly([(196, 62), (218, 62), (207, 78)], YELLOW, WHITE, 1)
+    poly([(196, 62), (218, 62), (207, 78)], YELLOW)
     poly([(207, 82), (199, 93), (215, 93)], BLACK, WHITE, 2, 'bank_pointer')
     poly([(199, 96), (215, 96), (218, 100), (196, 100)], BLACK, WHITE, 1, 'bank_pointer')
 

@@ -6,3 +6,5 @@
 *.svg text eol=lf
 *.png binary
 *.ico binary
+# Empty final TSV fields intentionally end with a tab.
+windows-bridge/map/places.tsv whitespace=-blank-at-eol

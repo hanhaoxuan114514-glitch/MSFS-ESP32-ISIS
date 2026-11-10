@@ -1,12 +1,15 @@
-"""Assemble V1 release assets from locally verified runtime and firmware files."""
+"""Assemble release assets from local runtime and firmware builds."""
 from pathlib import Path
+import argparse
 import hashlib
 import json
 import shutil
 import zipfile
 
 root=Path(__file__).resolve().parent.parent
-version='v1.0.0'
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--version', choices=('v1.0.0','v2.0.0'), default='v2.0.0')
+version=parser.parse_args().version
 out=root/'artifacts'/('release-'+version)
 out.mkdir(parents=True,exist_ok=True)
 shutil.copy2(root/'artifacts/MyHud-portable.zip',out/f'MyHud-Windows-x64-{version}.zip')
@@ -14,7 +17,8 @@ firmware=out/'Firmware'
 firmware.mkdir(exist_ok=True)
 build=root/'esp32-firmware/build-s3'
 app=build/'lvgl_demo_v8.bin'
-assert hashlib.sha256(app.read_bytes()).digest()==hashlib.sha256((root/'artifacts/usb-hud/lvgl_demo_v8-progress.bin').read_bytes()).digest(),'Firmware differs from flashed progress-bar version'
+if version=='v1.0.0':
+    assert hashlib.sha256(app.read_bytes()).digest()==hashlib.sha256((root/'artifacts/usb-hud/lvgl_demo_v8-progress.bin').read_bytes()).digest(),'Firmware differs from flashed progress-bar version'
 for source,name in [(app,'app.bin'),(build/'bootloader/bootloader.bin','bootloader.bin'),(build/'partition_table/partition-table.bin','partition-table.bin')]:
     shutil.copy2(source,firmware/name)
 for name in ('LICENSE','THIRD_PARTY_NOTICES.md'):
@@ -29,7 +33,7 @@ for base,label in [(idf/'components','esp-idf/components'),(root/'esp32-firmware
             dest=firmware/'licenses'/label/p.relative_to(base)
             dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,dest)
 (firmware/'flash_args.txt').write_text('--flash_mode dio --flash_freq 80m --flash_size 16MB\n0x0 bootloader.bin\n0x8000 partition-table.bin\n0x10000 app.bin\n',encoding='utf-8')
-(firmware/'README.txt').write_text('''A350 ISIS 固件 V1 / v1.0.0
+(firmware/'README.txt').write_text(f'''A350 ISIS 固件 {version}
 
 适用：已验证的 Waveshare ESP32-S3 4 英寸 480×480、16 MB Flash、8 MB PSRAM、
 V3 示例 / TCA9554 背光控制的无触摸设备。默认 180° 显示。
@@ -46,8 +50,8 @@ python -m esptool --chip esp32s3 --port COM6 --baud 460800 write_flash --flash_m
 python -m esptool --chip esp32s3 --port COM6 --baud 460800 write_flash --flash_mode dio --flash_freq 80m --flash_size 16MB 0x0 bootloader.bin 0x8000 partition-table.bin 0x10000 app.bin
 
 烧录后重新开启 MyHud 桥接，MSFS 进入航班后开始显示实时数据。
-固件已在开发用无触摸设备烧录并通过校验；其他板型及干净设备完整烧录流程仍需自行核对。
-源码及第三方组件版本见 GitHub 标签 v1.0.0。
+请核对屏幕型号和分区布局，其他板型需要单独验证。
+源码及第三方组件版本见 GitHub 标签 {version}。
 ''',encoding='utf-8-sig')
 manifest={p.name:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in firmware.glob('*.bin')}
 (firmware/'firmware-manifest.json').write_text(json.dumps({'version':version,'chip':'esp32s3','images':manifest},indent=2),encoding='utf-8')

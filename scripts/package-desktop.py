@@ -11,29 +11,36 @@ bundle.mkdir(parents=True, exist_ok=True)
 shutil.copy2(root / 'A350 ISIS 助手.exe', bundle / 'A350 ISIS 助手.exe')
 bridge = bundle / 'windows-bridge'
 bridge.mkdir(exist_ok=True)
-for name in ('bridge.py', 'config.example.json'):
+for name in ('bridge.py', 'ble_bridge.py', 'ble_fields.def', 'radar_feed.py', 'config.example.json'):
     shutil.copy2(root / 'windows-bridge' / name, bridge / name)
 config=json.loads((bridge/'config.example.json').read_text(encoding='utf-8-sig'))
 config['dll']=None
 (bridge/'config.example.json').write_text(json.dumps(config,indent=2)+'\n',encoding='utf-8')
+shutil.copytree(root / 'windows-bridge/map', bridge / 'map', dirs_exist_ok=True)
 for name in ('LICENSE','THIRD_PARTY_NOTICES.md'):
     shutil.copy2(root/name,bundle/name)
 shutil.copy2(root/'windows-bridge/LICENSE.pyserial',bridge/'LICENSE.pyserial')
 ignore = shutil.ignore_patterns('__pycache__', '*.pyc', 'include', 'libs', 'Tools')
+shutil.copytree(root / 'cache/wireless-bench/host-deps', bridge / 'ble-deps',
+                ignore=shutil.ignore_patterns('__pycache__', '*.pyc'), dirs_exist_ok=True)
 shutil.copytree(root / 'tools/python311/tools', bundle / 'tools/python311/tools',
                 ignore=ignore, dirs_exist_ok=True)
 packages = Path('tools/espressif/python_env/idf5.3_py3.11_env/Lib/site-packages')
 for name in ('serial', 'pyserial-3.5.dist-info'):
     shutil.copytree(root / packages / name, bundle / packages / name,
                     ignore=shutil.ignore_patterns('__pycache__', '*.pyc'), dirs_exist_ok=True)
-(bundle / 'README.txt').write_text('''A350 ISIS 助手 · USB 有线版
+(bundle / 'README.txt').write_text('''A350 ISIS 助手 · USB 与蓝牙
 
-双击本文件夹内的 A350 ISIS 助手.exe，选择 COM6，点击“开启桥接”。
+双击本文件夹内的 A350 ISIS 助手.exe，选择“USB 有线”或“蓝牙 BLE”，点击“开启桥接”。
+USB 模式需要选择设备串口，例如 COM6。蓝牙模式自动寻找 MyHud BLE，需要支持 BLE 的屏幕固件。
+运行时可以切换模式，助手会停止当前连接并按新模式重新连接。
+在左侧切换 HUD 和 ADS-B；在线街道图、全球城市和机场搜索均位于 ADS-B 页面。点击左下角齿轮可选择强调色。
+离线底图、地点索引和图钉可离线使用。真实飞机由电脑从 adsb.fi 获取，需要网络。
 模拟器进入航班后，程序会将数据发送到屏幕。
 关闭窗口会收到系统托盘；右键托盘可开启、停止或退出。
 启动此副本之前，请先从托盘退出工作文件夹里的旧副本，避免争用串口。
 
-此文件夹已包含 Python 和串口库，不依赖原开发工作文件夹或 W: 盘。
+此文件夹包含 Python、串口库和蓝牙库，不依赖开发工作文件夹或驱动器别名。
 请保留 tools 和 windows-bridge 文件夹；日志及设置会写在本文件夹 logs 下。
 Windows .NET Framework 使用系统现有版本，不需要额外安装。
 
@@ -44,6 +51,7 @@ SimConnect.dll 不包含在包内。程序会尝试发现本机已有的 BeyondA
 
 自有代码采用 MIT 许可。Python、pyserial 等第三方运行时保留各自许可，见 LICENSE、
 THIRD_PARTY_NOTICES.md、tools/python311/tools/LICENSE.txt 和 windows-bridge/LICENSE.pyserial。
+蓝牙库许可证随各包保存在 windows-bridge/ble-deps 的 .dist-info 目录中。
 ''', encoding='utf-8-sig')
 files = sorted(p for p in bundle.rglob('*') if p.is_file() and p.name != 'package-manifest.json')
 manifest = {p.relative_to(bundle).as_posix(): {'bytes': p.stat().st_size,
