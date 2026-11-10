@@ -8,7 +8,7 @@ import zipfile
 
 root=Path(__file__).resolve().parent.parent
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--version', choices=('v1.0.0','v2.0.0'), default='v2.0.0')
+parser.add_argument('--version', choices=('v1.0.0','v2.0.0','v2.1.0'), default='v2.1.0')
 version=parser.parse_args().version
 out=root/'artifacts'/('release-'+version)
 out.mkdir(parents=True,exist_ok=True)

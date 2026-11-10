@@ -31,13 +31,14 @@ for name in ('serial', 'pyserial-3.5.dist-info'):
                     ignore=shutil.ignore_patterns('__pycache__', '*.pyc'), dirs_exist_ok=True)
 (bundle / 'README.txt').write_text('''A350 ISIS 助手 · USB 与蓝牙
 
-双击本文件夹内的 A350 ISIS 助手.exe，选择“USB 有线”或“蓝牙 BLE”，点击“开启桥接”。
+双击本文件夹内的 A350 ISIS 助手.exe，助手会按上次选择的“USB 有线”或“蓝牙 BLE”自动开启桥接。
 USB 模式需要选择设备串口，例如 COM6。蓝牙模式自动寻找 MyHud BLE，需要支持 BLE 的屏幕固件。
 运行时可以切换模式，助手会停止当前连接并按新模式重新连接。
 在左侧切换 HUD 和 ADS-B；在线街道图、全球城市和机场搜索均位于 ADS-B 页面。点击左下角齿轮可选择强调色。
 离线底图、地点索引和图钉可离线使用。真实飞机由电脑从 adsb.fi 获取，需要网络。
 模拟器进入航班后，程序会将数据发送到屏幕。
 关闭窗口会收到系统托盘；右键托盘可开启、停止或退出。
+左下角齿轮菜单可开关「登录 Windows 时自动启动」，开启后登录 Windows 时会在系统托盘启动桥接。
 启动此副本之前，请先从托盘退出工作文件夹里的旧副本，避免争用串口。
 
 此文件夹包含 Python、串口库和蓝牙库，不依赖开发工作文件夹或驱动器别名。

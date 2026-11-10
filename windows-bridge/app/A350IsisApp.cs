@@ -7,6 +7,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Ports;
 using System.Management;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -17,6 +18,52 @@ using Microsoft.Win32.SafeHandles;
 
 namespace A350Isis
 {
+    internal static class LoginStartup
+    {
+        internal static string ShortcutPath {
+            get {return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup),"MyHud.lnk");}
+        }
+        internal static bool Enabled(string shortcut,string executable)
+        {
+            if(!File.Exists(shortcut)) return false;
+            bool enabled=false;
+            WithShortcut(shortcut,delegate(object link) {
+                enabled=String.Equals((string)ShortcutMember(link,"TargetPath",BindingFlags.GetProperty),
+                    executable,StringComparison.OrdinalIgnoreCase) &&
+                    String.Equals((string)ShortcutMember(link,"Arguments",BindingFlags.GetProperty),
+                        "--tray",StringComparison.OrdinalIgnoreCase);
+            });
+            return enabled;
+        }
+        internal static void SetEnabled(string shortcut,string executable,bool enabled)
+        {
+            if(!enabled) {
+                if(Enabled(shortcut,executable)) File.Delete(shortcut);
+                return;
+            }
+            WithShortcut(shortcut,delegate(object link) {
+                ShortcutMember(link,"TargetPath",BindingFlags.SetProperty,executable);
+                ShortcutMember(link,"Arguments",BindingFlags.SetProperty,"--tray");
+                ShortcutMember(link,"WorkingDirectory",BindingFlags.SetProperty,Path.GetDirectoryName(executable));
+                ShortcutMember(link,"Description",BindingFlags.SetProperty,"登录 Windows 后在托盘启动 MyHud");
+                ShortcutMember(link,"Save",BindingFlags.InvokeMethod);
+            });
+            if(!Enabled(shortcut,executable)) throw new IOException("未能验证 MyHud 的启动快捷方式。");
+        }
+        private static object ShortcutMember(object link,string name,BindingFlags flags,params object[] args)
+        {
+            return link.GetType().InvokeMember(name,flags,null,link,args);
+        }
+        private static void WithShortcut(string path,Action<object> use)
+        {
+            object shell=Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell",true));
+            try {
+                object link=ShortcutMember(shell,"CreateShortcut",BindingFlags.InvokeMethod,path);
+                try {use(link);} finally {Marshal.FinalReleaseComObject(link);}
+            } finally {Marshal.FinalReleaseComObject(shell);}
+        }
+    }
+
     internal static class Native
     {
         [DllImport("shell32.dll", SetLastError=true)] internal static extern IntPtr CommandLineToArgvW([MarshalAs(UnmanagedType.LPWStr)] string command, out int count);
@@ -177,7 +224,19 @@ namespace A350Isis
         private void BuildSettingsMenu()
         {
             Ui.StyleMenu(settingsMenu);
-            settingsMenu.AccessibleName="设置 · 强调色";
+            settingsMenu.AccessibleName="设置";
+            var autoStart=new ToolStripMenuItem("登录 Windows 时自动启动");
+            autoStart.Click+=delegate {
+                try {
+                    LoginStartup.SetEnabled(LoginStartup.ShortcutPath,Application.ExecutablePath,!autoStart.Checked);
+                    autoStart.Checked=LoginStartup.Enabled(LoginStartup.ShortcutPath,Application.ExecutablePath);
+                } catch(Exception error) {
+                    Append(error.ToString());
+                    MessageBox.Show(this,"无法更改开机自启，请查看助手日志。",Title,MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                }
+            };
+            settingsMenu.Items.Add(autoStart);
+            settingsMenu.Items.Add(new ToolStripSeparator());
             settingsMenu.Items.Add(new ToolStripMenuItem("强调色"){Enabled=false});
             settingsMenu.Items.Add(new ToolStripSeparator());
             string[] names={"蓝色","紫色","粉色","红色","橙色","绿色","灰色"};
@@ -201,6 +260,13 @@ namespace A350Isis
             });
             settingsMenu.Items.Add(custom);
             settingsMenu.Opening+=delegate {
+                try {
+                    autoStart.Checked=LoginStartup.Enabled(LoginStartup.ShortcutPath,Application.ExecutablePath);
+                    autoStart.Enabled=true;
+                } catch(Exception error) {
+                    autoStart.Enabled=false;
+                    Append(error.ToString());
+                }
                 bool preset=false;
                 for(int i=0;i<choices.Count;i++) {
                     bool selected=((Color)choices[i].Tag).ToArgb()==Palette.UserAccent.ToArgb();
@@ -313,7 +379,19 @@ namespace A350Isis
             } catch(FileNotFoundException) { } catch(ArgumentException) { } catch(Exception e) {Append("旧桥接检测："+e.Message);}
             finally {if(candidate!=null) candidate.Dispose();}
         }
-        private void StartBridge()
+        internal void StartSession(bool inTray)
+        {
+            if(inTray) {ShowInTaskbar=false;Opacity=0;}
+            Shown+=delegate {
+                if(inTray) {
+                    Hide();
+                    Opacity=1;
+                    notified=true;
+                }
+                StartBridge(inTray);
+            };
+        }
+        private void StartBridge(bool inTray=false)
         {
             if(Running || changing) return;
             if(!BluetoothMode && !ProcessIdentity.ValidPort(selectedPort)) {MessageBox.Show(this,"请选择有效的串口。",Title);return;}
@@ -342,7 +420,11 @@ namespace A350Isis
                     {"process_id",process.Id},{"start_time_utc",bridgeStart.ToUniversalTime().ToString("o")},{"script_path",script},
                     {"port",selectedPort},{"mode",selectedMode},{"stdout_log",logPath},{"stderr_log",logPath},{"owner","desktop-app"}}),Encoding.UTF8);
                 Append("桥接已开启，正在连接模拟器和设备。");
-            } catch(Exception e) {Append(e.ToString());MessageBox.Show(this,"无法开启桥接："+e.Message,Title,MessageBoxButtons.OK,MessageBoxIcon.Warning);}
+            } catch(Exception e) {
+                Append(e.ToString());
+                if(inTray) tray.ShowBalloonTip(3500,Title,"自动开启桥接失败，请打开助手日志。",ToolTipIcon.Warning);
+                else MessageBox.Show(this,"无法开启桥接："+e.Message,Title,MessageBoxButtons.OK,MessageBoxIcon.Warning);
+            }
             UpdateState();
         }
         private void StopBridge(bool exitAfter,bool restart=false)
@@ -508,16 +590,27 @@ namespace A350Isis
             }
             throw new DirectoryNotFoundException("请把应用保留在项目文件夹内，与 windows-bridge 和 tools 文件夹一起使用。");
         }
-        [STAThread] private static void Main()
+        [STAThread] private static void Main(string[] args)
         {
             System.Net.ServicePointManager.SecurityProtocol|=System.Net.SecurityProtocolType.Tls12;
             Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
             try {
+                bool inTray=Array.Exists(args,arg=>String.Equals(arg,"--tray",StringComparison.OrdinalIgnoreCase));
                 string root=FindRoot();string key;
                 using(System.Security.Cryptography.SHA256 hash=System.Security.Cryptography.SHA256.Create()) key=BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(root.ToUpperInvariant()))).Replace("-","").Substring(0,16);
                 bool created;using(Mutex mutex=new Mutex(true,"Local\\A350ISIS_"+key,out created)) {
-                    if(!created) {IntPtr window=Native.FindWindow(null,MainWindow.Title);if(window!=IntPtr.Zero) Native.PostMessage(window,0x8001,IntPtr.Zero,IntPtr.Zero);return;}
-                    try {Application.Run(new MainWindow(root));}finally {mutex.ReleaseMutex();}
+                    if(!created) {
+                        if(!inTray) {
+                            IntPtr window=Native.FindWindow(null,MainWindow.Title);
+                            if(window!=IntPtr.Zero) Native.PostMessage(window,0x8001,IntPtr.Zero,IntPtr.Zero);
+                        }
+                        return;
+                    }
+                    try {
+                        var window=new MainWindow(root);
+                        window.StartSession(inTray);
+                        Application.Run(window);
+                    } finally {mutex.ReleaseMutex();}
                 }
             }catch(Exception e){MessageBox.Show(e.Message,MainWindow.Title,MessageBoxButtons.OK,MessageBoxIcon.Error);}
         }

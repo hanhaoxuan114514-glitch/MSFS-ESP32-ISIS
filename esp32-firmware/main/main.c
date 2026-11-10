@@ -35,7 +35,8 @@ void app_main(void)
     bsp_display_lock(0);
     /* 用户确认实物画面需要整体旋转 180°；使用 LVGL 8 的旋转接口。 */
     lv_disp_set_rotation(display, LV_DISP_ROT_180);
-    lv_timer_set_period(_lv_disp_get_refr_timer(display), ISIS_REFRESH_MS);
+    // VSYNC still gates flips. Poll sooner so a newly invalidated frame can use the next scan.
+    lv_timer_set_period(_lv_disp_get_refr_timer(display), 8);
     display_profile_install(display);
 
     if(ui_isis_create()==NULL) {

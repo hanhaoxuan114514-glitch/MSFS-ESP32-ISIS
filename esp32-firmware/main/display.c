@@ -16,6 +16,30 @@
 #include <string.h>
 
 static const char *TAG = "lcd_only";
+static unsigned completed_frames;
+static int64_t completed_flush_us;
+
+static void display_pace(void *arg)
+{
+    (void)arg;
+    for(;;) {
+        uint32_t delay=5;
+        bool waited_for_scan=false;
+        if(lvgl_port_lock(1)) {
+            unsigned before=completed_frames;
+            delay=lv_timer_handler();
+            waited_for_scan=before!=completed_frames && completed_flush_us>=1000;
+            lvgl_port_unlock();
+        }
+        if(waited_for_scan && delay<=1) {
+            taskYIELD();
+            continue;
+        }
+        // The LVGL 8 port sleeps at least 5 ms after a frame; that misses
+        // the next VSYNC if drawing already used most of the 16.6 ms budget.
+        vTaskDelay(pdMS_TO_TICKS(LV_CLAMP(1,delay,5)));
+    }
+}
 
 static void (*original_flush)(lv_disp_drv_t *, const lv_area_t *, lv_color_t *);
 static void (*original_copy)(lv_draw_ctx_t *, void *, lv_coord_t, const lv_area_t *,
@@ -115,6 +139,8 @@ static void profile_monitor(lv_disp_drv_t *driver,uint32_t elapsed_ms,uint32_t p
         }
     }
     previous_end=now;
+    completed_frames++;
+    completed_flush_us=flush_us;
     if(++frames>3 && frames%120!=0) return;
     profile_sample_t sample={
         .frames=frames,.elapsed_ms=elapsed_ms,.pixels=pixels,.intervals=intervals,.over_35ms=over_35ms,
@@ -144,6 +170,8 @@ void display_profile_install(lv_disp_t *display)
     original_copy=driver->draw_ctx->buffer_copy;
     if(original_copy && driver->direct_mode) driver->draw_ctx->buffer_copy=profile_copy;
     driver->monitor_cb=profile_monitor;
+    if(xTaskCreatePinnedToCore(display_pace,"lcd_pace",4096,NULL,5,NULL,1)!=pdPASS)
+        ESP_LOGW(TAG,"Fast display pacing unavailable");
 }
 
 lv_disp_t *display_start_lcd_only(void)

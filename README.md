@@ -3,7 +3,7 @@
 <p align="center">
   <img alt="MSFS 2024" src="https://img.shields.io/badge/MSFS-2024-1676D2">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-480%C3%97480-E7352C">
-  <img alt="USB" src="https://img.shields.io/badge/Connection-USB-21A98C">
+  <img alt="USB 和蓝牙" src="https://img.shields.io/badge/Connection-USB%20%7C%20BLE-21A98C">
   <img alt="LVGL 8.4" src="https://img.shields.io/badge/LVGL-8.4-6875D9">
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-21A98C"></a>
 </p>
@@ -16,17 +16,31 @@
 
 > 当前适配的是已验证的 **无触摸设备、480 × 480 方形屏幕、180° 安装方向**。封面为设计示意图，不是实物照片。
 
-## 下载 V2
+## 下载 V2.1
 
-**[前往 V2 发布页](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/tag/v2.0.0)**
+**[前往 V2.1 发布页](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/tag/v2.1.0)**
 
 | 下载 | 用途 |
 | --- | --- |
-| [Windows x64 便携包](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v2.0.0/MyHud-Windows-x64-v2.0.0.zip) | 含助手、Python、串口和蓝牙库，解压后打开 EXE |
-| [ESP32-S3 固件包](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v2.0.0/ESP32S3-ISIS-Firmware-v2.0.0.zip) | 含应用、引导程序、分区表及中文烧录说明 |
-| [SHA-256 校验文件](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v2.0.0/SHA256SUMS.txt) | 核对下载文件完整性 |
+| [Windows x64 便携包](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v2.1.0/MyHud-Windows-x64-v2.1.0.zip) | 含助手、Python、串口和蓝牙库，解压后打开 EXE |
+| [ESP32-S3 固件包](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v2.1.0/ESP32S3-ISIS-Firmware-v2.1.0.zip) | 含应用、引导程序、分区表及中文烧录说明 |
+| [SHA-256 校验文件](https://github.com/hanhaoxuan114514-glitch/MSFS-ESP32-ISIS/releases/download/v2.1.0/SHA256SUMS.txt) | 核对下载文件完整性 |
 
-SimConnect.dll 需由用户自己的兼容安装或 SDK 提供。固件包只适用于已确认的硬件配置；从 V1 升级并使用 BLE 或实体屏幕 ADS-B 时，请使用 V2 固件。
+Windows 包适合直接解压运行。SimConnect.dll 由用户已有的兼容安装或 SDK 提供。升级实体屏幕前，请核对下方的硬件配置和包内烧录说明。
+
+## V2.1 更新
+
+- **HUD** 改善马赫数刷新，减少数字残影，并修整准星和阶梯框的像素接缝。
+- **实体 ADS-B** 在指示空速下方显示马赫数。放大航班标签并调整位置以避免重叠，底栏完整显示站点、范围和状态。目标密集时优先保留呼号，空间不足时保留飞机符号。
+- **Windows 助手** 启动时按上次使用的连接方式自动开启桥接。左下角齿轮菜单可开关登录 Windows 后的托盘自启。
+- **屏幕性能** 在同一组连续机动的实机测试中，平均渲染帧率从 30.17 提升到 37.13 FPS，1% low 约为 30.15 FPS。帧率随画面变化，稳定 60 FPS 仍未达到。
+
+<p align="center">
+  <img src="assets/repo/hud-v2.1.png" alt="480×480 HUD 离屏预览" width="240">
+  <img src="assets/repo/adsb-v2.1.png" alt="480×480 ADS-B 密集目标离屏预览" width="240">
+</p>
+
+上图为固件绘制的 480×480 离屏预览，使用测试数据。
 
 ## 功能一览
 
@@ -40,8 +54,7 @@ SimConnect.dll 需由用户自己的兼容安装或 SDK 提供。固件包只适
 | 连接保护 | 数据校验、序列检查、失联超时、USB 和模拟器自动重连 |
 | 桌面控制 | 串口选择、开启／停止、连接状态、日志入口、系统托盘 |
 | 刷新方式 | 默认 20 Hz USB 数据发送，LVGL 按变化区域刷新 |
-
-经纬度、SIM 来源框、LIVE 标签和额外气压单位文字已从屏幕移除，保留简洁的仪表布局。气压数值仍显示。
+| ADS-B | Windows 在线地图、城市和机场搜索、图钉，实体屏幕航班标签自动避让 |
 
 ## 连接方式
 
@@ -59,12 +72,14 @@ flowchart LR
 
 ### 已有完整便携运行包
 
-1. 用 USB 数据线连接已烧录本项目固件的屏幕。
-2. 打开 `A350 ISIS 助手.exe`，选择实际串口，例如 `COM6`。
-3. 启动 MSFS 2024 并进入航班，点击 **开启桥接**。
+1. 给已烧录本项目固件的屏幕供电。如果接上 USB‑C 后屏幕仍处于关机状态，短按板上的 PWRKEY。
+2. 打开 `A350 ISIS 助手.exe`。选择 USB 时指定实际串口，例如 `COM6`，选择蓝牙时助手会自动寻找 `MyHud BLE`。
+3. 助手启动时会按上次选择的 USB 或蓝牙方式开启桥接。启动 MSFS 2024 并进入航班后，屏幕会自动接收数据。
 4. 关闭窗口后助手会收到托盘；右键托盘可开启、停止或退出。
 
 请保留运行包里的 `tools` 和 `windows-bridge` 文件夹。**源码压缩包不等于便携运行包**：本仓库不包含 Python、ESP-IDF 工具链或本机生成的 EXE。
+
+在助手左下角的齿轮菜单中可开关「登录 Windows 时自动启动」。开启后，登录时助手会在托盘启动并开启桥接。设置保存在当前用户启动文件夹（`shell:startup`）的 `MyHud.lnk`（约 1 KB）。
 
 ### 蓝牙连接
 
@@ -72,11 +87,9 @@ flowchart LR
 
 ### 实时飞机雷达
 
-在助手左侧选择 **ADS-B 雷达**，电脑和实体屏幕会切到雷达。屏幕顶部显示 MSFS 当前飞机的高度、指示空速和剩余油量，雷达目标来自选定位置周围的真实飞机。
+在助手左侧选择 **ADS-B 雷达**，电脑和实体屏幕会切到雷达。屏幕顶部显示 MSFS 当前飞机的高度、指示空速、马赫数和剩余油量，雷达目标来自选定位置周围的真实飞机。
 
-地图支持拖动、滚轮缩放和点击选点，使用在线街道图，离线时显示缓存瓦片或简化地图。地点索引可按机场代码或城市名搜索，包含 OurAirports 和 GeoNames 的城市、机场数据。图钉记录在助手目录的 `logs/radar-airports.json`。点击左侧 **HUD 仪表** 可切回仪表。街道图和 ADS‑B 目标需要电脑联网。主题强调色可在左下角的设置中选择。地点索引文件为 `windows-bridge/map/places.tsv`（约 18.8 MB），位于工作目录和 MyHud 安装目录中。
-
-卫星底图来自 [NASA Earth Observatory 的 Blue Marble](https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/)。原图（21,600 × 10,800，约 27.2 MB）位于工作目录的 `downloads/map/nasa-blue-marble-july-21600.jpg`。项目保留按缩放级别分片的 `windows-bridge/map/blue-marble.zip`（约 33.1 MB），安装副本位于 `D:\Application\MSFS\MyHud\windows-bridge\map\blue-marble.zip`。
+地图支持拖动、滚轮缩放和点击选点，使用在线街道图，离线时显示缓存瓦片或简化地图。地点索引可按机场代码或城市名搜索，包含 OurAirports 和 GeoNames 的城市、机场数据。图钉记录在助手目录的 `logs/radar-airports.json`。点击左侧 **HUD 仪表** 可切回仪表。街道图和 ADS‑B 目标需要电脑联网。主题强调色可在左下角的设置中选择。地点索引文件为 `windows-bridge/map/places.tsv`（约 18.8 MB），随 Windows 便携包提供。
 
 ### 从源码运行桥接
 
@@ -113,13 +126,13 @@ python -m venv .venv
 
 <p align="center"><img src="assets/repo/desktop-app.png" alt="Windows 桌面助手界面示意" width="600"></p>
 
-界面图用于展示控制窗口，不代表当前游戏读数。应用支持后台运行、单实例和已有桥接进程核验，避免重复占用同一串口。
+界面使用示例读数展示控制窗口。应用支持后台运行、单实例和已有桥接进程核验，避免重复占用同一串口。
 
 ## 项目结构
 
 ```text
-esp32-firmware/       ESP32-S3 显示、USB 接收与数据模型
-windows-bridge/       SimConnect → USB 桥接
+esp32-firmware/       ESP32-S3 显示、USB 和 BLE 接收与数据模型
+windows-bridge/       SimConnect 桥接、BLE 和 ADS-B
   app/               Windows 桌面助手、图标与构建脚本
 scripts/             界面生成、本地构建及打包辅助脚本
 tests/               桥接、协议和布局测试
@@ -139,11 +152,12 @@ assets/repo/         项目展示资源
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-当前 **19 项 Python 测试通过**；桌面助手的进程身份测试随 `windows-bridge/app/build.ps1` 执行。`tests/embedded/` 中的 Unity 用例需要独立 ESP-IDF 测试程序，不能把普通固件编译成功当作已运行这些用例。
+当前 **36 项 Python 测试通过**；桌面助手的进程身份测试随 `windows-bridge/app/build.ps1` 执行。`tests/embedded/` 中的 Unity 用例需要独立 ESP-IDF 测试程序，不能把普通固件编译成功当作已运行这些用例。
 
 ## 当前边界
 
-- 已完成实际屏幕烧录、USB 实时数据传输、断电重连和单发／双发数据接收验证。
+- 已完成实际屏幕烧录、USB 实时数据传输、蓝牙重连和单发／双发数据接收验证。
+- 实测板子在 USB‑C 冷上电后仍需短按 PWRKEY。Windows 托盘自启只负责启动助手和桥接。
 - 四发识别及切换逻辑通过测试，**四发飞机的实物显示仍待实测**。
 - 油门百分比表示模拟器的杆位，**不是 N1 或发动机推力**。`REV` 根据负杆位或反推装置展开状态显示。
 - 燃油百分比为剩余总油量除以总容量；V/S 单位为 `ft/min`，显示按 50 ft/min 取整。

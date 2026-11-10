@@ -17,6 +17,10 @@
 #define GROUND 0xB85948
 #define BLACK 0x030609
 #define DEG .017453292519943295f
+#define MACH_X 39
+#define MACH_Y 310
+#define MACH_W 72
+#define MACH_H 27
 typedef struct { float x, y; } point_t;
 /* Mirror the contour about x=207 and y=183. */
 static const point_t boundary[] = {{92,69},{120,62},{163,58},{207,57},{251,58},{294,62},
@@ -114,6 +118,32 @@ static void line(lv_draw_ctx_t *ctx,point_t a,point_t b,uint32_t color,int width
     lv_draw_line_dsc_t style;lv_draw_line_dsc_init(&style);style.color=lv_color_hex(color);style.width=width;
     lv_draw_line(ctx,&style,&p,&q);
 }
+static void solid_area(lv_draw_ctx_t *ctx,lv_area_t area,uint32_t color)
+{
+    lv_area_t clip;
+    if(!_lv_area_intersect(&clip,ctx->clip_area,&area) ||
+       !_lv_area_intersect(&clip,&clip,ctx->buf_area)) return;
+    int stride=lv_area_get_width(ctx->buf_area);
+    lv_color_t *row=(lv_color_t *)ctx->buf+(clip.y1-ctx->buf_area->y1)*stride+clip.x1-ctx->buf_area->x1;
+    lv_color_t fill=lv_color_hex(color);
+    for(int y=0;y<=clip.y2-clip.y1;y++)
+        lv_color_fill(row+y*stride,fill,lv_area_get_width(&clip));
+}
+static void solid_rect(lv_draw_ctx_t *ctx,float x,float y,float w,float h,uint32_t color)
+{
+    solid_area(ctx,(lv_area_t){sx(x),sy(y),sx(x+w)-1,sy(y+h)-1},color);
+}
+static long mach_display(const flight_data_t *sample)
+{
+    return sample->connected && sample->mach_valid?lround(sample->mach*100):-1;
+}
+static void mach_text(const flight_data_t *sample,char *out,size_t size,bool prefix)
+{
+    long value=mach_display(sample);
+    if(value<0) snprintf(out,size,"%s--",prefix?"M ":"");
+    else if(prefix || value>=100) snprintf(out,size,"%s%ld.%02ld",prefix?"M ":"",value/100,value%100);
+    else snprintf(out,size,".%02ld",value);
+}
 static void centered_value(lv_draw_ctx_t *ctx,const char *text,float x,float y,float w,float h,unsigned size,uint32_t color)
 {
     const lv_font_t *f=font(size);
@@ -182,6 +212,7 @@ static point_t attitude_point(point_t p,float c,float s)
 static void draw_backdrop(lv_draw_ctx_t *ctx,bool show_attitude,float c,float s,float displacement)
 {
     static int16_t left[480],right[480];
+    static lv_color_t sky_row[480],ground_row[480],black_row[480];
     static bool ready;
     if(!ready) {
         for(int y=sy(57);y<sy(309);y++) {
@@ -198,6 +229,9 @@ static void draw_backdrop(lv_draw_ctx_t *ctx,bool show_attitude,float c,float s,
             left[y]=(int16_t)ceilf(low-.5f);
             right[y]=(int16_t)ceilf(high-.5f)-1;
         }
+        lv_color_fill(sky_row,lv_color_hex(SKY),480);
+        lv_color_fill(ground_row,lv_color_hex(GROUND),480);
+        lv_color_fill(black_row,lv_color_hex(BLACK),480);
         ready=true;
     }
 
@@ -207,32 +241,31 @@ static void draw_backdrop(lv_draw_ctx_t *ctx,bool show_attitude,float c,float s,
     const int first=sy(57),last=sy(309)-1;
     const float center_x=sx(207),center_y=sy(193);
     const float height=displacement*1.25f;
-    const lv_color_t sky=lv_color_hex(SKY),ground=lv_color_hex(GROUND),black=lv_color_hex(BLACK);
     // Fill every clipped pixel exactly once, including outside the attitude window.
     for(int y=clip.y1;y<=clip.y2;y++) {
         lv_color_t *row=(lv_color_t *)ctx->buf+(y-ctx->buf_area->y1)*stride+clip.x1-ctx->buf_area->x1;
         if(!show_attitude || y<first || y>last) {
-            lv_color_fill(row,black,lv_area_get_width(&clip));
+            memcpy(row,black_row,lv_area_get_width(&clip)*sizeof(*row));
             continue;
         }
         int x1=LV_MAX(clip.x1,left[y]),x2=LV_MIN(clip.x2,right[y]);
         if(x1>x2) {
-            lv_color_fill(row,black,lv_area_get_width(&clip));
+            memcpy(row,black_row,lv_area_get_width(&clip)*sizeof(*row));
             continue;
         }
-        if(x1>clip.x1) lv_color_fill(row,black,x1-clip.x1);
-        if(x2<clip.x2) lv_color_fill(row+x2+1-clip.x1,black,clip.x2-x2);
+        if(x1>clip.x1) memcpy(row,black_row,(x1-clip.x1)*sizeof(*row));
+        if(x2<clip.x2) memcpy(row+x2+1-clip.x1,black_row,(clip.x2-x2)*sizeof(*row));
         row+=x1-clip.x1;
         float distance=c*(y+.5f-center_y)-height;
         float edge1=distance+s*(x1+.5f-center_x),edge2=distance+s*(x2+.5f-center_x);
         if((edge1>=0)==(edge2>=0)) {
-            lv_color_fill(row,edge1>=0?ground:sky,x2-x1+1);
+            memcpy(row,edge1>=0?ground_row:sky_row,(x2-x1+1)*sizeof(*row));
         } else {
             int split=(int)ceilf(center_x-.5f-distance/s);
             if(s<0) split=(int)floorf(center_x-.5f-distance/s)+1;
             split=LV_MAX(x1,LV_MIN(split,x2+1));
-            if(split>x1) lv_color_fill(row,edge1>=0?ground:sky,split-x1);
-            if(split<=x2) lv_color_fill(row+split-x1,edge2>=0?ground:sky,x2-split+1);
+            if(split>x1) memcpy(row,edge1>=0?ground_row:sky_row,(split-x1)*sizeof(*row));
+            if(split<=x2) memcpy(row+split-x1,edge2>=0?ground_row:sky_row,(x2-split+1)*sizeof(*row));
         }
     }
 }
@@ -243,6 +276,8 @@ static void attitude_stroke(lv_draw_ctx_t *ctx,point_t a,point_t b)
     lv_area_t clip;
     if(!_lv_area_intersect(&clip,ctx->clip_area,ctx->buf_area)) return;
     int x0=sx(a.x),x1=sx(b.x),y0=sy(a.y),y1=sy(b.y);
+    if(LV_MAX(x0,x1)+3<clip.x1 || LV_MIN(x0,x1)-3>clip.x2 ||
+       LV_MAX(y0,y1)+3<clip.y1 || LV_MIN(y0,y1)-3>clip.y2) return;
     bool steep=abs(y1-y0)>abs(x1-x0);
     int m0=steep?y0:x0,m1=steep?y1:x1,n0=steep?x0:y0,n1=steep?x1:y1;
     if(m0>m1) {
@@ -257,7 +292,8 @@ static void attitude_stroke(lv_draw_ctx_t *ctx,point_t a,point_t b)
     const float slope=(float)(n1-n0)/(m1-m0);
     const int step=(int)lroundf(slope*256);
     const int radius=(int)lroundf(384*sqrtf(1+slope*slope));
-    int center=n0*256+(int)lroundf((major_min-m0)*slope*256);
+    // Keep subpixel coverage identical when the same line is split across dirty areas.
+    int center=n0*256+(major_min-m0)*step;
     const lv_color_t ink=lv_color_hex(WHITE);
     for(int major=major_min;major<=major_max;major++,center+=step) {
         const int low=center-radius,high=center+radius;
@@ -398,11 +434,25 @@ static void fixed_scene(lv_draw_ctx_t *ctx)
     for(unsigned i=0;i<ISIS_COMMAND_COUNT;i++) {
         const isis_command_t *p=&isis_commands[i];if(dynamic_role(p->role)) continue;
         if(p->type==0) {
+            const lv_point_t *a=p->points;
+            if(p->count==4 && a[0].y==a[1].y && a[1].x==a[2].x && a[2].y==a[3].y && a[3].x==a[0].x) {
+                solid_area(ctx,(lv_area_t){LV_MIN(a[0].x,a[2].x),LV_MIN(a[0].y,a[2].y),
+                    LV_MAX(a[0].x,a[2].x),LV_MAX(a[0].y,a[2].y)},p->color);
+                continue;
+            }
             lv_draw_rect_dsc_t d;lv_draw_rect_dsc_init(&d);d.bg_color=lv_color_hex(p->color);d.bg_opa=LV_OPA_COVER;d.border_width=0;
             lv_draw_polygon(ctx,&d,p->points,p->count);
         } else if(p->type==1) {
             lv_draw_line_dsc_t d;lv_draw_line_dsc_init(&d);d.color=lv_color_hex(p->color);d.width=p->width;
-            for(unsigned j=1;j<p->count;j++) lv_draw_line(ctx,&d,&p->points[j-1],&p->points[j]);
+            for(unsigned j=1;j<p->count;j++) {
+                lv_point_t a=p->points[j-1],b=p->points[j];
+                if(a.x==b.x || a.y==b.y) {
+                    // Solid, overlapping ends keep orthogonal reticle joins pixel-tight.
+                    int before=p->width/2,after=(p->width-1)/2;
+                    solid_area(ctx,(lv_area_t){LV_MIN(a.x,b.x)-before,LV_MIN(a.y,b.y)-before,
+                        LV_MAX(a.x,b.x)+after,LV_MAX(a.y,b.y)+after},p->color);
+                } else lv_draw_line(ctx,&d,&a,&b);
+            }
         }
     }
 }
@@ -576,7 +626,7 @@ static void numbers(lv_draw_ctx_t *ctx)
 {
     char text[64];bool live=data.connected;
     if(live) snprintf(text,sizeof(text),"%.0f",data.ias_kt);else strcpy(text,"---");
-    point_t box[]={{41,180},{87,180},{87,210},{41,210}};polygon(ctx,box,4,BLACK);
+    solid_rect(ctx,41,180,46,30,BLACK);
     bool overspeed=live && data.overspeed_kt>0 && data.ias_kt>=data.overspeed_kt;
     label(ctx,text,43,181,43,28,strlen(text)>3?22:30,live && !overspeed?WHITE:RED,false);
     if(live) snprintf(text,sizeof(text),"%.0f",data.altitude_ft);else strcpy(text,"-----");
@@ -586,14 +636,14 @@ static void numbers(lv_draw_ctx_t *ctx)
     if(live && data.vertical_speed_valid) snprintf(text,sizeof(text),"V/S %+ld",vertical_speed_display(&data));
     else strcpy(text,"V/S ----");
     label(ctx,text,294,336,98,18,strlen(text)>10?16:18,WHITE,true);
-    if(live && data.mach_valid) {snprintf(text,sizeof(text),"%.2f",data.mach);if(text[0]=='0') memmove(text,text+1,strlen(text));}
-    else strcpy(text,"--");
     if(rotor_layout()) {
         if(live && data.ground_speed_valid) snprintf(text,sizeof(text),"GS %.0f KT",data.ground_speed_kt);
         else strcpy(text,"GS -- KT");
         label(ctx,text,40,313,92,23,20,WHITE,false);
     } else if(!rpm_layout()) {
-        label(ctx,text,59,313,47,29,strlen(text)>3?24:30,GREEN,false);
+        mach_text(&data,text,sizeof(text),false);
+        solid_rect(ctx,MACH_X,MACH_Y,MACH_W,MACH_H,BLACK);
+        label(ctx,text,MACH_X,MACH_Y,MACH_W,MACH_H,28,GREEN,true);
     } else {
         label(ctx,aircraft_layout==AIRCRAFT_AIRSHIP?"ENG RPM":"PROP RPM",34,249,59,12,10,WHITE,false);
         for(unsigned i=0;i<data.engine_count;i++) {
@@ -720,22 +770,94 @@ static void draw_curtain(lv_draw_ctx_t *ctx)
     }
 }
 
+#define RADAR_X 215
+#define RADAR_Y 221
+#define RADAR_RADIUS 126
+
+typedef struct {
+    int x,y,w,h;
+    char altitude[16];
+} radar_tag_t;
+static radar_tag_t radar_tags[RADAR_MAX_TARGETS];
+static unsigned radar_symbols_only;
+
+static point_t radar_point(const radar_target_t *target)
+{
+    return (point_t){RADAR_X+target->east*RADAR_RADIUS/1000.f,
+                     RADAR_Y-target->north*RADAR_RADIUS/1000.f};
+}
+static bool radar_tag_overlap(const radar_tag_t *a,const radar_tag_t *b)
+{
+    return b->w && a->x<b->x+b->w && b->x<a->x+a->w &&
+                   a->y<b->y+b->h && b->y<a->y+a->h;
+}
+static bool place_radar_tag(radar_tag_t *tag,point_t point,const radar_tag_t *occupied,unsigned count)
+{
+    int x=(int)lroundf(point.x),y=(int)lroundf(point.y);
+    const int positions[][2]={{x+10,y-tag->h/2},{x-tag->w-10,y-tag->h/2},
+        {x-tag->w/2,y-tag->h-10},{x-tag->w/2,y+10},
+        {x+10,y-tag->h-8},{x-tag->w-10,y-tag->h-8},{x+10,y+8},{x-tag->w-10,y+8}};
+    for(unsigned i=0;i<sizeof(positions)/sizeof(positions[0]);i++) {
+        tag->x=positions[i][0];tag->y=positions[i][1];
+        if(tag->x<28 || tag->x+tag->w>402 || tag->y<88 || tag->y+tag->h>356) continue;
+        bool fits=true;
+        for(unsigned j=0;j<count;j++) if(radar_tag_overlap(tag,&occupied[j])) {fits=false;break;}
+        if(fits) return true;
+    }
+    return false;
+}
+static void layout_radar_tags(void)
+{
+    radar_tag_t occupied[2*RADAR_MAX_TARGETS+2]={
+        {.x=50,.y=211,.w=23,.h=21},{.x=357,.y=211,.w=23,.h=21}
+    };
+    unsigned count=2;
+    for(unsigned i=0;i<radar_view.count;i++) {
+        point_t p=radar_point(&radar_view.targets[i]);
+        occupied[count++]=(radar_tag_t){.x=lroundf(p.x)-8,.y=lroundf(p.y)-8,.w=17,.h=17};
+    }
+    memset(radar_tags,0,sizeof(radar_tags));
+    radar_symbols_only=0;
+    for(unsigned i=0;i<radar_view.count;i++) {
+        const radar_target_t *target=&radar_view.targets[i];
+        radar_tag_t tag={0};
+        if(target->altitude_hundreds!=INT16_MIN)
+            snprintf(tag.altitude,sizeof(tag.altitude),"%d FT",target->altitude_hundreds*100);
+        int name=lv_txt_get_width(target->callsign,strlen(target->callsign),font(18),0,LV_TEXT_FLAG_NONE);
+        int altitude=lv_txt_get_width(tag.altitude,strlen(tag.altitude),font(16),0,LV_TEXT_FLAG_NONE);
+        if(!name && !altitude) {radar_symbols_only++;continue;}
+        tag.w=(int)ceilf(LV_MAX(name,altitude)/1.25f)+8;
+        tag.h=name && altitude?36:20;
+        point_t p=radar_point(target);
+        bool placed=place_radar_tag(&tag,p,occupied,count);
+        if(!placed && name && altitude) {
+            // A readable callsign takes priority over an overlapping second line.
+            tag.altitude[0]=0;tag.w=(int)ceilf(name/1.25f)+8;tag.h=20;
+            placed=place_radar_tag(&tag,p,occupied,count);
+        }
+        if(placed) {radar_tags[i]=tag;occupied[count++]=tag;}
+        else radar_symbols_only++;
+    }
+}
+
 static void draw_live_radar(lv_draw_ctx_t *ctx)
 {
-    const float x=215,y=230,radius=140;
+    const float x=RADAR_X,y=RADAR_Y,radius=RADAR_RADIUS;
     const uint32_t grid=0x29483B,track=0x9FE3AD;
     draw_backdrop(ctx,false,1,0,0);
     char text[32];
     if(data.connected) snprintf(text,sizeof(text),"ALT %.0f FT",data.altitude_ft);
     else strcpy(text,"ALT -- FT");
-    label(ctx,text,31,35,121,22,16,WHITE,true);
+    label(ctx,text,27,34,123,24,18,WHITE,true);
     if(data.connected) snprintf(text,sizeof(text),"IAS %.0f KT",data.ias_kt);
     else strcpy(text,"IAS -- KT");
-    label(ctx,text,154,35,122,22,16,WHITE,true);
+    label(ctx,text,151,32,128,23,18,WHITE,true);
+    mach_text(&data,text,sizeof(text),true);
+    label(ctx,text,151,54,128,21,18,CYAN,true);
     if(data.connected && data.fuel_valid) snprintf(text,sizeof(text),"FUEL %.0f",data.fuel_pct);
     else strcpy(text,"FUEL --");
-    label(ctx,text,278,35,121,22,16,WHITE,true);
-    line(ctx,(point_t){33,61},(point_t){397,61},grid,1);
+    label(ctx,text,280,34,123,24,18,WHITE,true);
+    line(ctx,(point_t){29,77},(point_t){401,77},grid,1);
     for(unsigned i=1;i<=3;i++) {
         float r=radius*i/3;
         lv_area_t ring={sx(x-r),sy(y-r),sx(x+r),sy(y+r)};
@@ -749,32 +871,38 @@ static void draw_live_radar(lv_draw_ctx_t *ctx)
     }
     line(ctx,(point_t){x-radius,y},(point_t){x+radius,y},grid,1);
     line(ctx,(point_t){x,y-radius},(point_t){x,y+radius},grid,1);
-    label(ctx,"N",x-10,70,20,17,12,WHITE,true);
-    label(ctx,"S",x-10,372,20,17,12,WHITE,true);
-    label(ctx,"W",52,y-8,20,17,12,WHITE,true);
-    label(ctx,"E",358,y-8,20,17,12,WHITE,true);
+    label(ctx,"N",x-10,79,20,16,16,WHITE,true);
+    label(ctx,"S",x-10,356,20,17,16,WHITE,true);
+    label(ctx,"W",51,y-9,20,18,16,WHITE,true);
+    label(ctx,"E",358,y-9,20,18,16,WHITE,true);
+    for(unsigned i=0;i<radar_view.count;i++) {
+        const radar_tag_t *tag=&radar_tags[i];
+        if(!tag->w) continue;
+        const char *name=radar_view.targets[i].callsign;
+        solid_rect(ctx,tag->x,tag->y,tag->w,tag->h,0x101A21);
+        if(*name) label(ctx,name,tag->x+4,tag->y+1,tag->w-8,18,18,WHITE,false);
+        if(tag->altitude[0]) label(ctx,tag->altitude,tag->x+4,tag->y+(*name?19:1),tag->w-8,17,16,track,false);
+    }
     for(unsigned i=0;i<radar_view.count;i++) {
         const radar_target_t *target=&radar_view.targets[i];
-        float tx=x+target->east*radius/1000,ty=y-target->north*radius/1000;
+        point_t point=radar_point(target);
+        float tx=point.x,ty=point.y;
         float heading=target->bearing*(360.f/256)*DEG;
         float dx=sinf(heading),dy=-cosf(heading);
         point_t tip={tx+7*dx,ty+7*dy};
         point_t wings[3]={{tx-4*dx-4*dy,ty-4*dy+4*dx},tip,{tx-4*dx+4*dy,ty-4*dy-4*dx}};
         line(ctx,wings[0],wings[1],track,2);
         line(ctx,wings[1],wings[2],track,2);
-        float tag_x=tx>x?tx-71:tx+9;
-        if(target->callsign[0]) label(ctx,target->callsign,tag_x,ty-13,62,13,10,WHITE,false);
-        if(target->altitude_hundreds!=INT16_MIN) {
-            snprintf(text,sizeof(text),"%d FT",target->altitude_hundreds*100);
-            label(ctx,text,tag_x,ty,62,13,10,track,false);
-        }
     }
+    line(ctx,(point_t){29,374},(point_t){401,374},grid,1);
     snprintf(text,sizeof(text),"%s  /  %u NM",radar_view.site[0]?radar_view.site:"LIVE RADAR",radar_view.range_nm);
-    label(ctx,text,32,390,365,17,16,WHITE,true);
-    const char *status=radar_view.status==1?"WAITING FOR ADS-B":
-                       radar_view.status==3?"ADS-B UNAVAILABLE":
-                       radar_view.count?"LIVE ADS-B":"NO AIRCRAFT IN RANGE";
-    label(ctx,status,32,409,365,14,12,radar_view.status==2?track:WHITE,true);
+    label(ctx,text,28,375,374,19,20,WHITE,true);
+    if(radar_view.status==1) strcpy(text,"WAITING FOR ADS-B");
+    else if(radar_view.status==3) strcpy(text,"ADS-B UNAVAILABLE");
+    else if(!radar_view.count) strcpy(text,"NO AIRCRAFT IN RANGE");
+    else if(radar_symbols_only) snprintf(text,sizeof(text),"LIVE / %u AC / %u SYMBOL ONLY",radar_view.count,radar_symbols_only);
+    else snprintf(text,sizeof(text),"LIVE ADS-B / %u AIRCRAFT",radar_view.count);
+    label(ctx,text,28,395,374,17,16,radar_view.status==2?track:WHITE,true);
 }
 
 static void draw_isis(lv_event_t *event)
@@ -904,16 +1032,18 @@ static void refresh(lv_timer_t *timer)
     bool switched=(radar.status!=0)!=(radar_view.status!=0);
     bool targets_changed=memcmp(&radar,&radar_view,sizeof(radar))!=0;
     radar_view=radar;
+    if(targets_changed && radar.status) layout_radar_tags();
     if(switched) {
         data=presented=next;
         lv_obj_invalidate(instrument);
         return;
     }
     if(radar.status) {
-        if(targets_changed) dirty(29,69,372,355);
+        if(targets_changed) dirty(26,78,378,345);
         if(next.connected!=presented.connected || lround(next.altitude_ft)!=lround(presented.altitude_ft) ||
            lround(next.ias_kt)!=lround(presented.ias_kt) || next.fuel_valid!=presented.fuel_valid ||
-           lround(next.fuel_pct)!=lround(presented.fuel_pct)) dirty(30,34,371,26);
+           lround(next.fuel_pct)!=lround(presented.fuel_pct) ||
+           mach_display(&next)!=mach_display(&presented)) dirty(26,31,378,45);
         data=presented=next;
         return;
     }
@@ -975,7 +1105,7 @@ static void refresh(lv_timer_t *timer)
         tape_sample_tick=lv_tick_get();
         altitude_sample_tick=tape_sample_tick-66;
     }
-    bool full=next.connected!=data.connected || next.demo!=data.demo || next.mach_valid!=data.mach_valid;
+    bool full=next.connected!=data.connected || next.demo!=data.demo;
     if(full) {data=next;presented=next;lv_obj_invalidate(instrument);return;}
     if(next.connected) {
         if(fabs(next.pitch_deg-presented.pitch_deg)>.05 ||
@@ -1000,7 +1130,8 @@ static void refresh(lv_timer_t *timer)
         }
         if(fabs(next.heading_deg-presented.heading_deg)>.05) {dirty(131,309,151,50);presented.heading_deg=next.heading_deg;}
         if(lround(next.qnh_hpa)!=lround(presented.qnh_hpa)) {dirty(310,306,82,34);presented.qnh_hpa=next.qnh_hpa;}
-        if((int)round(next.mach*100)!=(int)round(presented.mach*100)) {dirty(58,312,49,31);presented.mach=next.mach;}
+        if(mach_display(&next)!=mach_display(&presented)) dirty(MACH_X,MACH_Y,MACH_W,MACH_H);
+        presented.mach=next.mach;presented.mach_valid=next.mach_valid;
         if(next.agl_valid!=presented.agl_valid || lround(next.agl_ft)!=lround(presented.agl_ft)) {
             dirty(286,35,120,22);
             presented.agl_valid=next.agl_valid;

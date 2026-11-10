@@ -589,7 +589,7 @@ namespace A350Isis
                 Ui.Text(g,items[i],Ui.Font(11f,true),new Rectangle(row.X+Ui.Px(42),row.Y,row.Width-Ui.Px(48),row.Height),
                         Palette.Ink,Ui.Left);
             }
-            Ui.Text(g,"V2.0  ·  MSFS 2024",Ui.Font(9.5f,true),new Rectangle(Ui.Px(20),Height-Ui.Px(32),
+            Ui.Text(g,"V2.1  ·  MSFS 2024",Ui.Font(9.5f,true),new Rectangle(Ui.Px(20),Height-Ui.Px(32),
                 Width-Ui.Px(40),Ui.Px(20)),Palette.Muted,Ui.Left);
         }
     }
